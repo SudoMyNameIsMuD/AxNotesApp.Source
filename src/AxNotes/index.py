@@ -1,5 +1,5 @@
-from contextlib import closing
 import sqlite3
+from contextlib import closing
 
 from .parser import parse_file
 
@@ -55,10 +55,9 @@ def rebuild(notebook):
     if notebook.index_path.exists():
         notebook.index_path.unlink()
     count = 0
-    with closing(connect(notebook.index_path)) as db:
-        with db:
-            for path in files(notebook):
-                count += replace(db, notebook, path)
+    with closing(connect(notebook.index_path)) as db, db:
+        for path in files(notebook):
+            count += replace(db, notebook, path)
     return count
 
 

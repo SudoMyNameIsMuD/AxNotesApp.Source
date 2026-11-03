@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from .config import Config, DEFAULT_CONFIG
-from .models import Entry, EntryType, TaskState, TASK_MARKERS
+from .config import DEFAULT_CONFIG, Config
+from .models import TASK_MARKERS, Entry, EntryType, TaskState
 from .parser import parse_file
 
 STORAGE_PREFIXES = {

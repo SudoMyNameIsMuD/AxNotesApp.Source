@@ -1,5 +1,5 @@
 from datetime import date
-from AxNotes.cli import handle_command
+
 from AxNotes.index import rebuild, search
 from AxNotes.interaction import normalize_detail, normalize_entry
 from AxNotes.models import EntryType, TaskState

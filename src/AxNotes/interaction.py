@@ -1,4 +1,5 @@
-from .models import EntryType,TaskState
+from .models import EntryType, TaskState
+
 COMMANDS=("today","week","search","reindex","sync","help","quit")
 def normalize_entry(raw):
  value=raw.strip()

@@ -1,6 +1,6 @@
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-import tomllib
 
 DEFAULT_CONFIG = '''[notebook]
 version = "0.1"

@@ -1,4 +1,4 @@
-from .models import Entry, EntryType, TaskState, TASK_MARKERS
+from .models import TASK_MARKERS, Entry, EntryType, TaskState
 
 DISPLAY_MARKERS = {
     EntryType.NOTE: " - ",

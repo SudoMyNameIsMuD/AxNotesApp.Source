@@ -5,7 +5,7 @@ from pathlib import Path
 from . import __version__
 from .index import rebuild, search, sync
 from .interaction import COMMANDS, normalize_detail, normalize_entry
-from .models import Entry, EntryType, TaskState, TASK_MARKERS
+from .models import Entry, EntryType, TaskState
 from .notebook import Notebook
 from .renderer import render_entry
 

@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+
 from .models import Entry, EntryType, TaskState
 
 TASK_RE = re.compile(r"^\[(?P<state>[ /xX>\-])\]\s+(?P<text>.*)$")
