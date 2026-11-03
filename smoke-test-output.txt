@@ -1,0 +1,23 @@
+AxNotes
+
+# MONDAY | 02NOV26
+
+-  -  hello from smoke test
+- [ ] task one
+-      › detail one
+- 
+# MONDAY | 02NOV26
+
+ -  hello from smoke test
+[ ] task one
+     › detail one
+
+- 
+# WEEK | 02NOV26–08NOV26
+
+## MONDAY | 02NOV26
+ -  hello from smoke test
+[ ] task one
+     › detail one
+
+- AxNotes closed.
