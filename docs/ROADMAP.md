@@ -1,251 +1,200 @@
-# AxNotes Roadmap
+## AxNotes Roadmap
 
-**Updated:** 03 Nov 2026  
+**Updated:** 04 Nov 2026  
 **Canonical repository:** `SudoMyNameIsMuD/AxNotesApp.Source`
 
-> **Core UX principle:** AxNotes should become easier to use as its implementation becomes more capable. Ordinary users should not need to understand Python, SQLite, UUIDs, metadata sidecars, or internal file-management behavior.
+**Core UX principle:** AxNotes should become easier to use as its implementation becomes more capable. Ordinary users should not need to understand Python, SQLite, UUIDs, metadata sidecars, or internal file-management behavior.
 
-## Current Baseline
+### Current Baseline
 
-- Working interactive CLI on the `notes/` notebook layout.
-- Clean Markdown with no visible UUID comments in new notes.
-- SQLite remains derived, disposable, and rebuildable.
-- Shared renderer uses `entry.entry_type`.
-- Canonical repository baseline: Ruff clean and 8 tests passing.
-- Public GitHub source currently contains the P0 Step 1 application foundation. P0 Step 2 work was described in a handoff but must be recovered or reimplemented in the canonical repository before Steps 3 and 4.
+- P0 Steps 1 through 8 are complete.
+- Working interactive CLI uses the `notes/` notebook layout.
+- Clean Markdown contains no visible UUID comments.
+- Durable entry identities are stored in validated JSON sidecars under `.AxNotes/metadata/`.
+- SQLite is derived, disposable, and rebuildable from Markdown plus metadata.
+- Renderer uses the `entry.entry_type` model contract.
+- P0 is validated on Windows with OneDrive; macOS and Linux validation remain pending.
 
-## Locked Format and Architecture Decisions
+### Locked Format and Architecture Decisions
 
-- `notes/` is the authoritative Markdown content directory for new notebooks.
+- `notes/` is the authoritative Markdown content directory.
 - `AxNotes.toml` identifies an AxNotes notebook.
-- `AxNotes init` creates only `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`.
-- `projects/` and `templates/` are not created until those features exist.
-- `.AxNotes/index.sqlite3` is created lazily and remains derived/disposable.
-- New Markdown must not contain visible `AxNotes:id` UUID comments.
+- `AxNotes init` creates `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`.
+- `.AxNotes/index.sqlite3` is derived, created lazily, and may be rebuilt.
 - Markdown owns entry text, type, task state, supporting details, and order.
-- `.AxNotes/metadata/` will own durable entry identity and relationships.
+- `.AxNotes/metadata/` owns durable identity and relationships.
 - Supporting details do not receive independent UUIDs in metadata schema v1.
 - AxNotes supports one supporting-detail level in v0.1.
-- Display alignment is presentation-layer behavior; do not pad authoritative Markdown for terminal alignment.
-- Same-file reordering may preserve identity when entries can be matched confidently.
-- External cross-file moves create new identity in schema v1; a future controlled move operation may preserve identity.
-- Task-state changes preserve identity when reconciliation is unambiguous.
+- Display alignment is presentation-only; Markdown is not padded for terminal output.
 - Metadata failure must never damage or rewrite Markdown.
-- Metadata commits before SQLite refresh.
-- Normal development packages must remain complete runnable applications unless explicitly labeled as prototypes.
+- Metadata is committed before SQLite is refreshed.
+- Normal packages remain complete runnable applications unless explicitly labeled as prototypes.
 
-## P0: Storage and Durable Identity Foundation
+### P0: Storage and Durable Identity Foundation — Complete
 
-### Step 1: Notes-based notebook layout — Complete
-
+#### Step 1: Notes-based notebook layout
 - `notes/` replaced `daily/` for new notebooks.
 - `.AxNotes/metadata/` reserved for durable identity sidecars.
-- Clean Markdown writer retained.
-- Interactive CLI restored on top of the new layout.
+- Clean Markdown writer and interactive CLI retained.
 
-### Step 2: Metadata schema and validation — Complete
+#### Step 2: Metadata schema and validation
+- Added `src/AxNotes/metadata.py` and metadata tests.
+- Added schema, UUID, ordinal, source, date, type, and fingerprint validation.
+- Added deterministic JSON loading and serialization.
 
-Implemented in the Git-controlled repository:
+#### Step 3: Deterministic fingerprints
+- Added full, content, parent, and text fingerprints.
+- Added deterministic SHA-256 canonicalization, line-ending normalization, and Unicode NFC normalization.
 
-- `src/AxNotes/metadata.py`
-- `tests/test_metadata.py`
-- `MetadataEntry` and `MetadataFile` dataclasses.
-- Schema-version validation.
-- UUID validation.
-- One-based ordinal validation and duplicate detection.
-- Notebook-relative source validation.
-- ISO source-date validation.
-- Fingerprint-format validation.
-- JSON load and deterministic serialization.
-- Safe error classes for missing, malformed, or unsupported metadata.
+#### Step 4: Pure reconciliation engine
+- Added exact, task-state, detail, type-transition, structural, new, and ambiguous matching behavior.
+- When identity is uncertain, AxNotes creates a new identity rather than guessing.
 
-Metadata schema v1 stores each entry's UUID, notebook-relative source, ISO source date, one-based ordinal, and four `sha256:v1` fingerprints (`full`, `content`, `parent`, and `text`). Metadata remains isolated from normal capture.
+#### Step 5: Reconciliation hardening
+- Added duplicate-content, insert, delete, reorder, state, detail, type, ambiguity, Unicode, and UUID-invariant coverage.
 
-### Step 3: Deterministic fingerprints — Complete
+#### Step 6: Atomic metadata persistence
+- Added temporary-file writing, validation, flushing, and atomic replacement.
+- Previous valid sidecars remain intact when replacement fails.
 
-Implemented in:
+#### Step 7: Notebook integration
+- Added sidecar loading, reconciliation, atomic persistence, and post-metadata index refresh.
+- Markdown remains unchanged during ordinary reconciliation.
 
-- `src/AxNotes/fingerprints.py`
-- `tests/test_fingerprints.py`
-- `docs/FINGERPRINTS.md`
+#### Step 8: Metadata-aware indexing
+- Added entry UUIDs to the derived SQLite index.
+- SQLite rebuilds from authoritative Markdown plus durable metadata.
+- Deleting and rebuilding SQLite preserves content and identity.
 
-The immutable `FingerprintSet` contains:
+#### P0 exit status
 
-- `full`: type, task state, text, ordered details.
-- `content`: type, text, ordered details; ignores task state.
-- `parent`: type and parent text; ignores state/details.
-- `text`: parent text only; ignores type/state/details.
+- P0 Steps 1 through 8 are complete.
+- CLI, metadata persistence, reconciliation, and index rebuilding are validated on Windows with OneDrive.
+- Cross-platform validation on macOS and Linux remains pending.
+- The durable identity foundation is ready for the v0.2 interface milestone.
 
-Requirements:
+### v0.2: Interface Improvement Roadmap
 
-- SHA-256 with deterministic compact JSON.
-- Fingerprint algorithm version marker.
-- CRLF/CR to LF normalization.
-- Unicode NFC normalization.
-- Preserve case, punctuation, spelling, meaningful internal spaces, and detail order.
-- Exact reference-vector tests.
-- No UUID assignment, reconciliation, sidecar writes, SQLite changes, Markdown changes, or CLI changes.
+Each step includes implementation, tests, help/documentation updates, and regression validation.
 
-The implementation is pure and has no notebook or filesystem integration.
+#### 1. Inline rendering flow
 
-### Step 4: Pure in-memory reconciliation engine — Complete
+- Render each normalized entry immediately after capture.
+- Return to the writing prompt after entries and commands.
+- Use the shared renderer for interactive output and command views.
+- Keep UUIDs, metadata paths, SQLite details, and internal state out of user-facing output.
+- Show concise validation messages without ending the session or exposing a traceback.
 
-Implemented in:
+#### 2. Complete quick-entry notation
 
-- `src/AxNotes/reconcile.py`
-- `tests/test_reconcile.py`
-- `docs/RECONCILIATION.md`
-
-Matching passes:
-
-1. Unique full fingerprint → exact match.
-2. Unique content fingerprint → task-state change.
-3. Unique parent fingerprint → supporting-detail change.
-4. Compatible type transition with strong context.
-5. Single changed entry bounded by matched neighbors.
-6. New identity or ambiguous identity diagnostic.
-
-Safety rule:
-
-> When identity is uncertain, generate a new identity rather than attach an existing UUID to the wrong entry.
-
-Step 4 remains pure: no filesystem writes, Markdown rewrites, SQLite changes, or CLI output.
-
-### Step 5: Reconciliation hardening — Complete
-
-Implemented in:
-
-- `src/AxNotes/reconcile.py`
-- `tests/test_reconcile.py`
-
-Coverage includes:
-
-- duplicate-content ambiguity handling.
-- insert, delete, reorder, state-change, detail-change, and type-change scenarios.
-- ambiguity diagnostics.
-- one-to-one UUID invariants.
-- Unicode and ordering safety checks.
-- property/invariant regression tests where practical.
-
-### Step 6: Atomic metadata persistence — Complete
-
-Implemented in:
-
-- `src/AxNotes/metadata.py`
-- `tests/test_metadata.py`
-
-The persistence layer now:
-
-- writes sidecars to a temporary file.
-- flushes and validates temporary JSON before replacement.
-- uses atomic `os.replace` behavior.
-- preserves the previous sidecar when validation or write fails.
-- avoids truncating authoritative metadata before replacement succeeds.
-
-### Step 7: Notebook integration — Complete
-
-Implemented in:
-
-- `src/AxNotes/notebook.py`
-- `tests/test_metadata.py`
-
-The notebook layer now:
-
-- loads sidecars for parsed note files.
-- reconciles in memory using the stable fingerprint passes.
-- atomically saves replacement metadata after reconciliation.
-- refreshes SQLite only after metadata saves succeed.
-- keeps Markdown unchanged during ordinary reconciliation.
-
-### Step 8: Metadata-aware indexing — Complete
-
-Implemented in:
-
-- `src/AxNotes/index.py`
-- `tests/test_full_working.py`
-
-The SQLite index now:
-
-- stores UUIDs as derived index fields.
-- rebuilds from Markdown plus durable metadata.
-- preserves user content and identity when the SQLite file is deleted and rebuilt.
-
-### P0 exit criteria
-
-- Notes layout, metadata schema, fingerprints, reconciliation, atomic writes, and index integration are complete.
-- Full CLI continues working.
-- Renderer and inline views are stable.
-- Windows and macOS validation completed.
-- Notebook format documented and suitable for a v0.2 milestone.
-
-## P1: Core User Experience
-
-### Shared renderer and alignment
-
-Use the same renderer for capture, `/today`, `/week`, `/search`, standalone render, and future time views.
+Support consistent notation:
 
 ```text
- -  Normal note
-[ ] Open task
-[/] In-progress task
-[x] Completed task
-[>] Migrated task
-[-] Canceled task
- ?  Question
- !  Important
- @  Event
-     › Supporting detail
+text    Normal note
+[       Open task
+[/      In-progress task
+[x      Completed task
+[>      Migrated task
+[-      Canceled task
+?       Question
+!       Important entry
+@       Event
+>       Supporting detail
 ```
 
-- Top-level wrapped lines align under entry text.
-- Detail continuations align under detail text.
-- Terminal-width-aware wrapping remains presentation-only.
+- Support explicit leading task markers and trailing task-state shorthand.
+- Remove control markers from normalized entry text.
+- Preserve ordinary punctuation and meaningful text.
+- Reject empty markers without creating empty entries.
 
-### Inline rendering flow
+Example:
 
-After each entry:
+```text
+- [Follow up with John Doe
+[ ] Follow up with John Doe
+-
+```
 
-1. Normalize and validate input.
-2. Write clean Markdown.
-3. Update metadata/index when integrated.
-4. Render normalized result.
-5. Return to the `- ` prompt.
+#### 3. `/markdown` and `/md`
 
-Commands render inside the session and then return to the writing prompt.
+- Open today's Markdown file in the operating system's default Markdown application.
+- Create today's file first when it does not exist.
+- Keep the interactive AxNotes session running.
+- Support Windows, macOS, and Linux without requiring Visual Studio Code.
+- Report launch failures with a concise message rather than a traceback.
 
-### Time views
+#### 4. Improved `/help`
 
-- `/lastweek`: previous Monday through Sunday.
-- `/month`: current calendar month grouped by date.
-- Later consider `/yesterday` and an explicit `/date` command.
+Organize help into:
 
-### Search refinement
+```text
+Writing
+Commands
+Maintenance
+Planned
+```
 
-- Preserve `*`, `[ ]`, `[x]`, `!`, `?`, weekday, and date shortcuts.
-- Search supporting details.
-- Display parent plus matching details together.
-- Add phrase search and date-range search.
-- Add predictable broad-result limits and clearer no-result messages.
-- Defer complex query grammar until basic search is stable.
+- Show every active marker and command.
+- Keep maintenance commands separate from everyday commands.
+- Do not present planned commands as available until implemented.
 
-## P2: Identity-backed Entry Operations
+#### 5. Wrapped rendering
 
-Implement only after P0 identity integration is stable:
+- Wrap long entries to the terminal width.
+- Align top-level continuation lines beneath entry text.
+- Align detail continuation lines beneath detail text.
+- Apply the same wrapping to inline output, `/today`, `/week`, `/search`, and standalone rendering.
+- Keep alignment padding out of authoritative Markdown.
 
-1. Change an existing task state.
-2. Edit an existing entry.
-3. Delete an entry safely.
-4. Move/migrate an entry to another day.
-5. Add a detail to a previously created entry.
-6. Narrow `/undo` for the most recent AxNotes mutation.
+#### 6. `/lastweek`
+
+- Display the previous Monday through Sunday.
+- Group entries by date.
+- Preserve supporting details beneath parents.
+- Reuse the shared renderer and time-view formatting.
+
+#### 7. `/month`
+
+- Display the current calendar month grouped chronologically by date.
+- Preserve entry order and parent-detail relationships.
+- Begin with a reliable calendar-month view rather than an automated summary.
+
+#### 8. Welcome note and `/clearwelcome`
+
+- Create an example welcome note only when initializing a genuinely empty notebook.
+- Demonstrate all active markers and key commands using neutral examples such as John Doe.
+- Mark generated content with `axnotes_welcome: true` in frontmatter.
+- Add `/clearwelcome` to remove an unchanged generated welcome note, its metadata sidecar, and derived index entries.
+- Refuse automatic deletion when user content has been added or generated content has been modified.
+- Never overwrite an existing note or add welcome content to an established notebook.
+
+#### v0.2 completion target
+
+- All eight interface steps implemented.
+- Consistent inline and command rendering.
+- Clean Markdown remains UUID-free.
+- Ruff, pytest, and Git whitespace checks pass.
+- Help, roadmap, changelog, and user documentation are updated with each step.
+- Windows validation complete, with macOS and Linux validation where OS behavior differs.
+
+### Future Identity-backed Entry Operations
+
+Implement after the v0.2 interface milestone is stable:
+
+- Change an existing task state.
+- Edit an existing entry.
+- Delete an entry safely.
+- Move or migrate an entry to another day.
+- Add a detail to a previously created entry.
+- Add narrow `/undo` for the most recent AxNotes mutation.
 
 Requirements:
 
 - Safe failure and recovery behavior.
-- Clear distinction between viewing and modifying historical notes.
+- Clear distinction between viewing and modifying older notes.
 - No silent destructive edits.
 
-## P3: Rich Terminal Experience
+### Rich Terminal Experience
 
 - Replace plain `input()` with a richer terminal editing layer.
 - Transform quick markers in place rather than echoing raw and normalized lines.
@@ -253,29 +202,28 @@ Requirements:
 - Add input history and expected Left/Right/Home/End behavior.
 - Improve long-line editing and wrapping.
 - Gracefully handle Ctrl+C and EOF.
-- Add color only where it communicates structure/state.
-- Provide no-color/accessibility-friendly behavior.
+- Use optional color only where it conveys structure or state.
 
-## P4: Writing Assistance
+### Writing Assistance
 
-### Spellcheck
+#### Spellcheck
 
-- Suggestions only; never silent autocorrect.
+- Suggestions only; never silently autocorrect.
 - Local-first and offline-capable.
-- User dictionary for names, acronyms, companies, and technical/project terms.
+- User dictionary for names, acronyms, companies, and technical terms.
 - Ignore AxNotes markers and commands.
 - Preserve Markdown until the user explicitly accepts a correction.
-- Start with a future `/spellcheck` command before real-time highlighting.
+- Start with `/spellcheck` before real-time highlighting.
 
-## P5: Navigation, Safety, and Portability
+### Navigation, Safety, and Portability
 
-### Navigation
+#### Navigation
 
-- Open today's Markdown in the configured editor.
+- Open today's Markdown in the configured/default editor.
 - Open a search result in its source file.
 - Jump directly to another date.
 
-### Backup and restore
+#### Backup and restore
 
 Back up:
 
@@ -283,7 +231,7 @@ Back up:
 - `.AxNotes/metadata/`
 - `AxNotes.toml`
 
-Do not require backup of the disposable SQLite index.
+The disposable SQLite index does not require backup.
 
 Add:
 
@@ -292,23 +240,23 @@ Add:
 - Collision handling.
 - Restore verification and rollback.
 
-### Data portability
+#### Data portability
 
 - Markdown import.
 - Plain Markdown export.
 - Whole-notebook export.
-- Migration strategy before future authoritative format changes.
-- Preserve compatibility with earlier v0.1 notebooks where practical.
+- Migration strategy before authoritative format changes.
+- Compatibility with earlier v0.1 notebooks where practical.
 
-## P6: Distribution and Project Maturity
+### Distribution and Project Maturity
 
-- Keep `.venv` as the supported source/development workflow during v0.1.
+- Keep `.venv` as the supported source/development workflow during v0.1.x.
 - Add automated Windows, macOS, and Linux tests.
 - Later provide standalone Windows, macOS, and Linux packages.
 - Remove the Python/virtual-environment requirement for ordinary users once packaged releases are available.
 - Add `CONTRIBUTING.md`, `SECURITY.md`, architecture/format documentation, issue templates, and pull-request templates.
 
-## Test Architecture
+### Test Architecture
 
 Organize coverage into:
 
@@ -331,7 +279,7 @@ tests/
 
 Add injectable `input_fn` and `output_fn` to `interactive()` for reliable prompt-flow tests.
 
-## Quality Gates for Every Commit
+### Quality Gates for Every Commit
 
 ```powershell
 python -m ruff check src tests
@@ -349,17 +297,18 @@ Requirements:
 
 - No Python traceback during normal use.
 - New Markdown remains UUID-free.
-- No `.venv`, caches, personal notebooks, or secrets committed.
+- No `.venv`, caches, personal notebooks, credentials, or secrets are committed.
 - Every hands-on bug receives a regression test.
-- GitHub repository remains the canonical source of truth.
+- GitHub remains the canonical source of truth.
 
-## Versioning Recommendation
+### Versioning Recommendation
 
-- Continue foundation and identity work under `v0.1.x`.
-- Use `v0.2` for the first build running on the fully integrated metadata/fingerprint/reconciliation foundation.
-- Reserve `v1.0` for a stable notebook format, dependable cross-platform installation, and mature core UX.
+- Release the completed P0 identity foundation under v0.1.8.
+- Use v0.2 for the interface improvement milestone defined above.
+- Reserve v1.0 for a stable notebook format, dependable cross-platform installation, and mature core UX.
 
-## Immediate Next Actions
+### Immediate Next Actions
 
-1. Verify and commit Step 3 separately.
-2. Implement Step 4 reconciliation in two reviewable commits: foundation, then changed/ambiguous matching.
+1. Complete and publish the v0.1.8 P0 release.
+2. Begin v0.2 Step 1: inline rendering flow.
+3. Add tests and documentation with each interface step.
