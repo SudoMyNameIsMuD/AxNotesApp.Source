@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 
 from AxNotes.models import Entry, EntryType, TaskState
-from AxNotes.reconcile import ReconciliationResult, reconcile
+from AxNotes.reconcile import reconcile
 
 
 def test_reconcile_exact_match_preserves_existing_identity():

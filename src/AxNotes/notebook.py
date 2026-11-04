@@ -5,7 +5,13 @@ from uuid import UUID
 
 from .config import DEFAULT_CONFIG, Config
 from .fingerprints import fingerprint_entry
-from .metadata import MetadataEntry, MetadataFile, MetadataNotFoundError, load_metadata, write_metadata
+from .metadata import (
+    MetadataEntry,
+    MetadataFile,
+    MetadataNotFoundError,
+    load_metadata,
+    write_metadata,
+)
 from .models import TASK_MARKERS, Entry, EntryType, TaskState
 from .parser import parse_file
 from .reconcile import reconcile
@@ -111,12 +117,10 @@ class Notebook:
     def sync_metadata(self):
         for note_path in sorted(self.notes_dir.glob("*.md")):
             self.reconcile_note_file(note_path)
-        try:
-            from . import index
 
-            index.sync(self)
-        except Exception:
-            raise
+        from . import index
+        index.sync(self)
+
 
     def initialize(self):
         self.root.mkdir(parents=True, exist_ok=True)

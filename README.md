@@ -1,4 +1,4 @@
-# AxNotes v0.1.6 Full Working Build
+# AxNotes v0.1.7
 
 AxNotes is a local-first, Markdown-authoritative bullet notebook. This build restores the working interactive CLI while retaining the new `notes/` storage layout and clean Markdown introduced during P0.
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 from uuid import UUID, uuid4
 
 from .fingerprints import FingerprintSet, fingerprint_entry
@@ -74,7 +75,7 @@ def _normalized_fingerprints(entry: Any) -> FingerprintSet:
     if isinstance(entry, Entry):
         return fingerprint_entry(entry)
     if hasattr(entry, "fingerprints"):
-        fingerprints = getattr(entry, "fingerprints")
+        fingerprints = entry.fingerprints
         if isinstance(fingerprints, dict):
             return FingerprintSet(
                 full=fingerprints["full"],
@@ -94,7 +95,7 @@ def _entry_id(entry: Any) -> UUID | str | None:
 
 
 def _normalize_entry(entry: Any) -> _NormalizedEntry:
-    if isinstance(entry, dict):
+    if isinstance(entry, dict): # noqa: SIM102
         if "entry_type" in entry and "text" in entry:
             parsed = Entry(
                 entry_type=entry["entry_type"],
@@ -312,9 +313,9 @@ reconcile_entries = reconcile
 
 __all__ = [
     "ReconciliationDiagnostic",
+    "ReconciliationError",
     "ReconciliationMatch",
     "ReconciliationResult",
-    "ReconciliationError",
     "match_entries",
     "reconcile",
     "reconcile_entries",
