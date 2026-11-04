@@ -111,14 +111,21 @@ Safety rule:
 
 Step 4 remains pure: no filesystem writes, Markdown rewrites, SQLite changes, or CLI output.
 
-### Step 5: Reconciliation hardening
+### Step 5: Reconciliation hardening — Complete
 
-- Expanded duplicate-content scenarios.
-- Insert, delete, reorder, state-change, detail-change, and type-change matrix.
-- Ambiguity diagnostics.
-- One-to-one UUID invariants.
-- Cross-platform and Unicode coverage.
-- Property/invariant tests where practical.
+Implemented in:
+
+- `src/AxNotes/reconcile.py`
+- `tests/test_reconcile.py`
+
+Coverage includes:
+
+- duplicate-content ambiguity handling.
+- insert, delete, reorder, state-change, detail-change, and type-change scenarios.
+- ambiguity diagnostics.
+- one-to-one UUID invariants.
+- Unicode and ordering safety checks.
+- property/invariant regression tests where practical.
 
 ### Step 6: Atomic metadata persistence
 

@@ -40,3 +40,59 @@ def test_reconcile_new_identity_when_no_match_exists():
     assert result.matches[0].reason == "new_identity"
     assert result.diagnostics[0].reason == "new_identity"
     assert isinstance(result.matches[0].new_identity, UUID)
+
+
+def test_reconcile_reorders_with_same_identity_pairs():
+    first_id = uuid4()
+    second_id = uuid4()
+    previous = [
+        {"id": first_id, "entry_type": EntryType.NOTE, "text": "first"},
+        {"id": second_id, "entry_type": EntryType.NOTE, "text": "second"},
+    ]
+    current = [
+        {"entry_type": EntryType.NOTE, "text": "second"},
+        {"entry_type": EntryType.NOTE, "text": "first"},
+    ]
+
+    result = reconcile(previous, current)
+
+    assert [match.old_index for match in result.matches] == [1, 0]
+    assert result.matches[0].new_identity == second_id
+    assert result.matches[1].new_identity == first_id
+
+
+def test_reconcile_does_not_reuse_identity_for_ambiguous_duplicate_content():
+    first = {"id": uuid4(), "entry_type": EntryType.NOTE, "text": "duplicate"}
+    second = {"id": uuid4(), "entry_type": EntryType.NOTE, "text": "duplicate"}
+    current = [{"entry_type": EntryType.NOTE, "text": "duplicate"}]
+
+    result = reconcile([first, second], current)
+
+    assert result.matches[0].old_index is None
+    assert result.matches[0].reason == "new_identity"
+    assert result.diagnostics[0].reason == "ambiguous_identity"
+    assert result.matches[0].new_identity != first["id"]
+    assert result.matches[0].new_identity != second["id"]
+
+
+def test_reconcile_preserves_identity_across_task_state_and_detail_changes():
+    identity = uuid4()
+    previous = [{
+        "id": identity,
+        "entry_type": EntryType.TASK,
+        "text": "Write docs",
+        "task_state": TaskState.OPEN,
+        "details": ["draft"],
+    }]
+    current = [{
+        "entry_type": EntryType.TASK,
+        "text": "Write docs",
+        "task_state": TaskState.DONE,
+        "details": ["revised"],
+    }]
+
+    result = reconcile(previous, current)
+
+    assert result.matches[0].old_index == 0
+    assert result.matches[0].new_identity == identity
+    assert result.matches[0].reason in {"task_state_change", "supporting_detail_change"}

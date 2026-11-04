@@ -189,38 +189,42 @@ def _candidate_for_new_entry(
     new_index: int,
     entry: _NormalizedEntry,
     old: tuple[_NormalizedEntry, ...],
-    new_length: int,
     old_by_full: dict[str, list[int]],
     old_by_content: dict[str, list[int]],
     old_by_parent: dict[str, list[int]],
     old_by_text: dict[str, list[int]],
     used_old: set[int],
-    matched_new_indices: set[int],
-) -> tuple[int | None, str]:
+) -> tuple[int | None, str, str | None]:
     exact_match = _unique_index(old_by_full, entry.full)
     if exact_match is not None and exact_match not in used_old:
-        return exact_match, "exact_match"
+        return exact_match, "exact_match", None
 
     content_match = _unique_index(old_by_content, entry.content)
     if content_match is not None and content_match not in used_old:
-        return content_match, "task_state_change"
+        return content_match, "task_state_change", None
 
     parent_match = _unique_index(old_by_parent, entry.parent)
     if parent_match is not None and parent_match not in used_old:
-        return parent_match, "supporting_detail_change"
+        return parent_match, "supporting_detail_change", None
 
     text_match = _unique_index(old_by_text, entry.text_fingerprint)
     if text_match is not None and text_match not in used_old:
-        return text_match, "type_transition"
+        return text_match, "type_transition", None
 
     unmatched_old = [index for index in range(len(old)) if index not in used_old]
-    remaining_new = [index for index in range(new_length) if index not in matched_new_indices]
-    if len(old) > 1 and new_length > 1 and len(unmatched_old) == 1 and len(remaining_new) == 1:
-        candidate = unmatched_old[0]
-        if abs(candidate - new_index) <= 1:
-            return candidate, "neighbor_match"
+    if not unmatched_old:
+        return None, "new_identity", None
 
-    return None, "new_identity"
+    if len(old) > 1 and len(unmatched_old) == 1:
+        candidate = unmatched_old[0]
+        return candidate, "neighbor_match", None
+
+    neighbor_candidates = [index for index in unmatched_old if abs(index - new_index) <= 1]
+    if len(old) > 1 and len(neighbor_candidates) == 1:
+        return neighbor_candidates[0], "neighbor_match", None
+    if len(neighbor_candidates) > 1:
+        return None, "new_identity", "ambiguous_identity"
+    return None, "new_identity", "new_identity"
 
 
 def reconcile(old_entries: Iterable[Any], new_entries: Iterable[Any]) -> ReconciliationResult:
@@ -248,26 +252,29 @@ def reconcile(old_entries: Iterable[Any], new_entries: Iterable[Any]) -> Reconci
     diagnostics: list[ReconciliationDiagnostic] = []
 
     for new_index, entry in enumerate(new):
-        candidate, reason = _candidate_for_new_entry(
+        candidate, reason, diagnostic_reason = _candidate_for_new_entry(
             new_index,
             entry,
             old,
-            len(new),
             old_by_full,
             old_by_content,
             old_by_parent,
             old_by_text,
             used_old,
-            {match.new_index for match in matches},
         )
 
         if candidate is None:
             new_uuid = uuid4()
+            diag_reason = diagnostic_reason or "new_identity"
             diagnostics.append(
                 ReconciliationDiagnostic(
                     new_index=new_index,
-                    reason="new_identity",
-                    message="Identity was ambiguous or absent; created a new UUID.",
+                    reason=diag_reason,
+                    message=(
+                        "Identity was ambiguous; created a new UUID."
+                        if diag_reason == "ambiguous_identity"
+                        else "Identity was absent; created a new UUID."
+                    ),
                 )
             )
             matches.append(
