@@ -11,6 +11,7 @@ from AxNotes.metadata import (
     MetadataNotFoundError,
     UnsupportedMetadataVersionError,
     load_metadata,
+    write_metadata,
 )
 
 FINGERPRINT = "sha256:v1:" + "a" * 64
@@ -136,3 +137,36 @@ def test_load_metadata_reports_invalid_encoding(tmp_path):
 
     with pytest.raises(MalformedMetadataError, match="UTF-8"):
         load_metadata(path)
+
+
+def test_write_metadata_replaces_file_atomically(tmp_path):
+    path = tmp_path / "metadata.json"
+    original = MetadataFile.from_json(metadata_json(entry_data()))
+    path.write_text(metadata_json(entry_data(source="notes/2026-11-05.md")), encoding="utf-8")
+
+    write_metadata(path, original)
+
+    assert load_metadata(path) == original
+    assert path.read_text(encoding="utf-8") == original.to_json()
+
+
+def test_write_metadata_preserves_original_when_temp_validation_fails(tmp_path, monkeypatch):
+    path = tmp_path / "metadata.json"
+    original_text = metadata_json(entry_data())
+    path.write_text(original_text, encoding="utf-8")
+    original = MetadataFile.from_json(original_text)
+    real_from_json = MetadataFile.from_json
+    calls = {"count": 0}
+
+    def fake_from_json(content):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise MalformedMetadataError("temp validation failed")
+        return real_from_json(content)
+
+    monkeypatch.setattr("AxNotes.metadata.MetadataFile.from_json", fake_from_json)
+
+    with pytest.raises(MalformedMetadataError, match="temp validation failed"):
+        write_metadata(path, original)
+
+    assert path.read_text(encoding="utf-8") == original_text

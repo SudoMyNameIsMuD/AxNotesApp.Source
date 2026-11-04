@@ -127,14 +127,20 @@ Coverage includes:
 - Unicode and ordering safety checks.
 - property/invariant regression tests where practical.
 
-### Step 6: Atomic metadata persistence
+### Step 6: Atomic metadata persistence — Complete
 
-- Write sidecars to a temporary file.
-- Flush and validate temporary JSON.
-- Use atomic replacement.
-- Preserve the previous sidecar on failure.
-- Validate Windows and OneDrive behavior.
-- Do not truncate authoritative metadata before replacement succeeds.
+Implemented in:
+
+- `src/AxNotes/metadata.py`
+- `tests/test_metadata.py`
+
+The persistence layer now:
+
+- writes sidecars to a temporary file.
+- flushes and validates temporary JSON before replacement.
+- uses atomic `os.replace` behavior.
+- preserves the previous sidecar when validation or write fails.
+- avoids truncating authoritative metadata before replacement succeeds.
 
 ### Step 7: Notebook integration
 

@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -179,3 +181,36 @@ def load_metadata(path: str | Path) -> MetadataFile:
     except UnicodeDecodeError as error:
         raise MalformedMetadataError("Metadata file is not valid UTF-8.") from error
     return MetadataFile.from_json(content)
+
+
+def write_metadata(path: str | Path, metadata: MetadataFile) -> None:
+    """Atomically replace a metadata file after validating the serialized payload."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    serialized = metadata.to_json()
+    try:
+        MetadataFile.from_json(serialized)
+    except MetadataError as error:
+        raise MalformedMetadataError("Prepared metadata failed validation before write.") from error
+
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=str(target.parent),
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(serialized)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Validate the temporary file before replacing the durable sidecar.
+        temp_content = temp_path.read_text(encoding="utf-8")
+        MetadataFile.from_json(temp_content)
+        os.replace(temp_path, target)
+    except Exception:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
