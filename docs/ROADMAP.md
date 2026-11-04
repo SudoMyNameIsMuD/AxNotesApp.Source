@@ -88,9 +88,9 @@ Requirements:
 
 The implementation is pure and has no notebook or filesystem integration.
 
-### Step 4: Pure in-memory reconciliation engine — Planned
+### Step 4: Pure in-memory reconciliation engine — Complete
 
-Create:
+Implemented in:
 
 - `src/AxNotes/reconcile.py`
 - `tests/test_reconcile.py`
