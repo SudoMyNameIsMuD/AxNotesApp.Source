@@ -43,9 +43,9 @@
 - Clean Markdown writer retained.
 - Interactive CLI restored on top of the new layout.
 
-### Step 2: Metadata schema and validation — Next canonical task
+### Step 2: Metadata schema and validation — Complete
 
-Recover or implement in the Git-controlled repository:
+Implemented in the Git-controlled repository:
 
 - `src/AxNotes/metadata.py`
 - `tests/test_metadata.py`
@@ -59,7 +59,7 @@ Recover or implement in the Git-controlled repository:
 - JSON load and deterministic serialization.
 - Safe error classes for missing, malformed, or unsupported metadata.
 
-Do not integrate metadata into normal capture yet.
+Metadata schema v1 stores each entry's UUID, notebook-relative source, ISO source date, one-based ordinal, and four `sha256:v1` fingerprints (`full`, `content`, `parent`, and `text`). Metadata remains isolated from normal capture.
 
 ### Step 3: Deterministic fingerprints — Planned
 
@@ -332,8 +332,6 @@ Requirements:
 
 ## Immediate Next Actions
 
-1. Locate the previously implemented Step 2 `metadata.py` and `test_metadata.py`, or reimplement them in the canonical repository.
-2. Verify Step 2 with Ruff and pytest.
-3. Commit and push Step 2 separately.
-4. Implement and commit Step 3 fingerprints.
-5. Implement Step 4 reconciliation in two reviewable commits: foundation, then changed/ambiguous matching.
+1. Verify and commit Step 2 separately.
+2. Implement Step 3 deterministic fingerprints.
+3. Implement Step 4 reconciliation in two reviewable commits: foundation, then changed/ambiguous matching.
