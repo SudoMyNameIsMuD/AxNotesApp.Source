@@ -61,15 +61,15 @@ Implemented in the Git-controlled repository:
 
 Metadata schema v1 stores each entry's UUID, notebook-relative source, ISO source date, one-based ordinal, and four `sha256:v1` fingerprints (`full`, `content`, `parent`, and `text`). Metadata remains isolated from normal capture.
 
-### Step 3: Deterministic fingerprints — Planned
+### Step 3: Deterministic fingerprints — Complete
 
-Create:
+Implemented in:
 
 - `src/AxNotes/fingerprints.py`
 - `tests/test_fingerprints.py`
 - `docs/FINGERPRINTS.md`
 
-Implement an immutable `FingerprintSet` containing:
+The immutable `FingerprintSet` contains:
 
 - `full`: type, task state, text, ordered details.
 - `content`: type, text, ordered details; ignores task state.
@@ -85,6 +85,8 @@ Requirements:
 - Preserve case, punctuation, spelling, meaningful internal spaces, and detail order.
 - Exact reference-vector tests.
 - No UUID assignment, reconciliation, sidecar writes, SQLite changes, Markdown changes, or CLI changes.
+
+The implementation is pure and has no notebook or filesystem integration.
 
 ### Step 4: Pure in-memory reconciliation engine — Planned
 
@@ -332,6 +334,5 @@ Requirements:
 
 ## Immediate Next Actions
 
-1. Verify and commit Step 2 separately.
-2. Implement Step 3 deterministic fingerprints.
-3. Implement Step 4 reconciliation in two reviewable commits: foundation, then changed/ambiguous matching.
+1. Verify and commit Step 3 separately.
+2. Implement Step 4 reconciliation in two reviewable commits: foundation, then changed/ambiguous matching.
