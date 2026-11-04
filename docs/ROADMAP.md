@@ -142,13 +142,20 @@ The persistence layer now:
 - preserves the previous sidecar when validation or write fails.
 - avoids truncating authoritative metadata before replacement succeeds.
 
-### Step 7: Notebook integration
+### Step 7: Notebook integration — Complete
 
-- Load sidecars for parsed note files.
-- Reconcile in memory.
-- Atomically save replacement metadata.
-- Refresh SQLite only after metadata succeeds.
-- Keep Markdown unchanged during ordinary reconciliation.
+Implemented in:
+
+- `src/AxNotes/notebook.py`
+- `tests/test_metadata.py`
+
+The notebook layer now:
+
+- loads sidecars for parsed note files.
+- reconciles in memory using the stable fingerprint passes.
+- atomically saves replacement metadata after reconciliation.
+- refreshes SQLite only after metadata saves succeed.
+- keeps Markdown unchanged during ordinary reconciliation.
 
 ### Step 8: Metadata-aware indexing
 

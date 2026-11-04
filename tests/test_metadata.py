@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 
+from AxNotes.fingerprints import fingerprint_entry
 from AxNotes.metadata import (
     MalformedMetadataError,
     MetadataEntry,
@@ -13,6 +14,8 @@ from AxNotes.metadata import (
     load_metadata,
     write_metadata,
 )
+from AxNotes.models import Entry, EntryType
+from AxNotes.notebook import Notebook
 
 FINGERPRINT = "sha256:v1:" + "a" * 64
 
@@ -170,3 +173,45 @@ def test_write_metadata_preserves_original_when_temp_validation_fails(tmp_path, 
         write_metadata(path, original)
 
     assert path.read_text(encoding="utf-8") == original_text
+
+
+def test_notebook_sync_metadata_preserves_sidecar_identity_and_refreshes_index(tmp_path, monkeypatch):
+    notebook_dir = tmp_path / "notebook"
+    notes_dir = notebook_dir / "notes"
+    notes_dir.mkdir(parents=True)
+    note_path = notes_dir / "2026-11-04.md"
+    note_path.write_text("- hello\n", encoding="utf-8")
+
+    identity = UUID("12345678-1234-5678-1234-567812345678")
+    metadata_path = notebook_dir / ".AxNotes" / "metadata" / "notes" / "2026-11-04.json"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    entry_fingerprint = fingerprint_entry(Entry(EntryType.NOTE, "hello"))
+    previous = MetadataFile(
+        schema_version=1,
+        entries=(
+            MetadataEntry(
+                id=identity,
+                source="notes/2026-11-04.md",
+                source_date=date(2026, 11, 4),
+                ordinal=1,
+                fingerprints={
+                    "full": entry_fingerprint.full,
+                    "content": entry_fingerprint.content,
+                    "parent": entry_fingerprint.parent,
+                    "text": entry_fingerprint.text,
+                },
+            ),
+        ),
+    )
+    metadata_path.write_text(previous.to_json(), encoding="utf-8")
+
+    calls = []
+    monkeypatch.setattr("AxNotes.index.sync", lambda notebook: calls.append(notebook.root))
+
+    notebook = Notebook(notebook_dir)
+    notebook.sync_metadata()
+
+    assert calls == [notebook_dir]
+    refreshed = load_metadata(metadata_path)
+    assert refreshed.entries[0].id == identity
+    assert refreshed.entries[0].source == "notes/2026-11-04.md"
