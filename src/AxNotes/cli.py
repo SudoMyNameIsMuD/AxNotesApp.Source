@@ -47,10 +47,10 @@ def query_context(notebook, query):
     return value
 
 
-def print_search(notebook, query):
+def print_search(notebook, query, output_fn=print):
     rows = search(notebook, query_context(notebook, query))
     if not rows:
-        print("No matching AxNotes entries.")
+        output_fn("No matching AxNotes entries.")
         return
     current = None
     for row in rows:
@@ -58,72 +58,79 @@ def print_search(notebook, query):
             current = row["source_file"]
             stem = Path(current).stem
             try:
-                print("\n" + notebook.heading(datetime.strptime(stem, notebook.config.date_format).date()))
+                output_fn("\n" + notebook.heading(datetime.strptime(stem, notebook.config.date_format).date()))
             except ValueError:
-                print("\n# " + current)
+                output_fn("\n# " + current)
         entry = Entry(
             EntryType(row["type"]),
             row["text"],
             TaskState(row["task_state"]) if row["task_state"] else None,
         )
-        print(render_entry(entry))
+        output_fn(render_entry(entry))
 
 
-def handle_command(notebook, raw):
+def capture_inline_entry(notebook, raw, day=None):
+    value = raw.strip()
+    detail = normalize_detail(value)
+    if detail is not None:
+        notebook.append_detail(detail, day=day)
+        return f"     › {detail}"
+
+    entry_type, text, state = normalize_entry(value)
+    normalized = Entry(entry_type, text, state)
+    notebook.append(text, entry_type, day=day, task_state=state or TaskState.OPEN)
+    notebook.sync_metadata()
+    return render_entry(normalized)
+
+
+def handle_command(notebook, raw, output_fn=print, input_fn=input):
     command, _, argument = raw.partition(" ")
     if command == "/today":
-        print("\n" + notebook.render_day(date.today(), render_entry) + "\n")
+        output_fn("\n" + notebook.render_day(date.today(), render_entry) + "\n")
     elif command == "/week":
-        print("\n" + notebook.render_week(date.today(), render_entry) + "\n")
+        output_fn("\n" + notebook.render_week(date.today(), render_entry) + "\n")
     elif command == "/search":
-        query = argument.strip() or input("Search: ").strip()
+        query = argument.strip() or input_fn("Search: ").strip()
         if query:
-            print_search(notebook, query)
+            print_search(notebook, query, output_fn=output_fn)
     elif command == "/reindex":
-        print(f"AxNotes index rebuilt: {rebuild(notebook)} entries")
+        output_fn(f"AxNotes index rebuilt: {rebuild(notebook)} entries")
     elif command == "/sync":
         sync(notebook)
-        print("AxNotes index synchronized.")
+        output_fn("AxNotes index synchronized.")
     elif command in {"/help", "/"}:
-        print("\n" + MENU + "\n")
+        output_fn("\n" + MENU + "\n")
     elif command in {"/quit", "/exit"}:
         return False
     else:
-        print("Commands: " + "  ".join("/" + command for command in COMMANDS))
+        output_fn("Commands: " + "  ".join("/" + command for command in COMMANDS))
     return True
 
 
-def interactive(notebook):
+def interactive(notebook, input_fn=input, output_fn=print):
     try:
         notebook.validate()
     except FileNotFoundError:
-        print("AxNotes\n\nThis folder is not an AxNotes notebook.\n\nRun:\n  AxNotes init\n\nThen start AxNotes again.")
+        output_fn("AxNotes\n\nThis folder is not an AxNotes notebook.\n\nRun:\n  AxNotes init\n\nThen start AxNotes again.")
         return 2
-    print(f"AxNotes\n\n{notebook.heading(date.today())}\n")
+    output_fn(f"AxNotes\n\n{notebook.heading(date.today())}\n")
     while True:
         try:
-            raw = input("- ")
+            raw = input_fn("- ")
         except (EOFError, KeyboardInterrupt):
-            print("\nAxNotes closed.")
+            output_fn("\nAxNotes closed.")
             return 0
         if not raw.strip():
             continue
         if raw.startswith("/"):
-            if not handle_command(notebook, raw.strip()):
-                print("AxNotes closed.")
+            if not handle_command(notebook, raw.strip(), output_fn=output_fn, input_fn=input_fn):
+                output_fn("AxNotes closed.")
                 return 0
             continue
-        detail = normalize_detail(raw)
-        if detail is not None:
-            notebook.append_detail(detail)
-            print(f"     › {detail}")
-            continue
         try:
-            entry_type, text, state = normalize_entry(raw)
-            notebook.append(text, entry_type, task_state=state or TaskState.OPEN)
-            print(render_entry(Entry(entry_type, text, state)))
-        except ValueError:
-            continue
+            capture_inline_entry(notebook, raw)
+        except ValueError as exc:
+            output_fn(str(exc))
 
 
 def parser():

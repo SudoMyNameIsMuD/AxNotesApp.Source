@@ -1,0 +1,589 @@
+AxNotes Terminal Editing Project: Concept and Scope
+===================================================
+
+Overview
+--------
+The terminal-editing project is substantially larger than the current inline-rendering change because it replaces Python's basic input() behavior with a small interactive text editor.
+
+Current Interface
+-----------------
+Today, AxNotes relies on:
+
+    raw = input("- ")
+
+The terminal owns the line while the user types. AxNotes receives the text only after Enter is pressed.
+
+    Terminal displays raw input
+            ↓
+    User presses Enter
+            ↓
+    AxNotes receives completed string
+            ↓
+    AxNotes normalizes and saves it
+
+This is why AxNotes cannot cleanly transform:
+
+    [Follow up with John Doe
+
+into:
+
+    [ ] Follow up with John Doe
+
+on the same terminal line. By the time AxNotes sees the entry, the terminal has already displayed the raw version.
+
+Rich Terminal Editing
+---------------------
+A rich input layer would make AxNotes responsible for every keypress:
+
+    Key pressed
+        ↓
+    Update text buffer
+        ↓
+    Interpret marker or command
+        ↓
+    Redraw the current terminal line
+        ↓
+    Move cursor to correct position
+
+AxNotes would need to manage state conceptually like:
+
+    InputState(
+        text="Follow up with John Doe",
+        entry_type=EntryType.TASK,
+        task_state=TaskState.OPEN,
+        cursor_position=11,
+    )
+
+and redraw:
+
+    [ ] Follow up with John Doe
+
+while the user is still typing.
+
+Relative Project Size
+---------------------
+
+Small: Current inline-flow correction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Scope:
+
+- Remove duplicate rendered lines.
+- Preserve prompt continuity.
+- Keep command output inline.
+- Add regression tests.
+
+Likely affected areas:
+
+    cli.py
+    test_inline_cli.py
+    test_inline_commands.py
+
+This is a focused change.
+
+Medium: Enhanced input using prompt_toolkit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A practical first version using prompt_toolkit would involve:
+
+- Replacing input().
+- Maintaining a text buffer.
+- Adding command history.
+- Adding slash-command completion.
+- Handling Ctrl+C and Ctrl+D.
+- Setting prompt and continuation behavior.
+- Supporting Windows PowerShell, macOS, and Linux.
+- Adding terminal-specific tests.
+
+Likely affected areas:
+
+    pyproject.toml
+    cli.py
+    interaction.py
+    terminal.py
+    completion.py
+    history.py
+    test_terminal.py
+    test_inline_cli.py
+    test_completion.py
+
+Estimated effort: roughly 5 to 10 times the implementation and testing effort of the current inline-flow correction.
+
+Large: True marker transformation while typing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The exact experience originally envisioned is larger still.
+
+Example:
+
+    User types:
+    [
+
+    AxNotes immediately displays:
+    [ ]
+
+The user then continues:
+
+    [ ] Follow up with John Doe
+
+That requires:
+
+- Key bindings for marker detection.
+- Separation of displayed prefix from editable text.
+- Cursor-position translation.
+- Backspace behavior at the marker boundary.
+- Converting between entry types while editing.
+- Handling pasted text.
+- Handling trailing shorthand such as [x.
+- Undoing accidental marker conversion.
+- Redrawing after terminal resizing.
+- Correct handling of wrapped lines.
+- Accessibility and no-color behavior.
+- Cross-platform terminal testing.
+
+This is closer to building a small terminal text editor than adding another CLI command.
+
+Main Technical Components
+-------------------------
+
+1. Input buffer
+~~~~~~~~~~~~~~~
+AxNotes needs its own editable buffer:
+
+    display marker | editable text
+    [ ]            | Follow up with John Doe
+
+The marker should be rendered by AxNotes but not necessarily stored inside the editable buffer.
+
+2. Cursor mapping
+~~~~~~~~~~~~~~~~~
+If the internal cursor is at character 5 of the note text, the displayed cursor may need to be at position 9 because of the marker prefix:
+
+    [ ]
+
+AxNotes must continually translate between:
+
+    buffer position
+    display position
+
+3. Key bindings
+~~~~~~~~~~~~~~~
+AxNotes must define behavior for:
+
+    Enter
+    Backspace
+    Delete
+    Left
+    Right
+    Home
+    End
+    Up
+    Down
+    Ctrl+C
+    Ctrl+D
+    Tab
+    Escape
+
+4. Completion
+~~~~~~~~~~~~~
+Typing / could show:
+
+    /today
+    /week
+    /search
+    /markdown
+    /md
+    /help
+    /quit
+
+This requires command filtering, selection, insertion, and dismissal behavior.
+
+5. History
+~~~~~~~~~~
+The first decision is whether Up/Down means:
+
+- Previous raw entries.
+- Previous commands.
+- Both commands and entries.
+- Search-history navigation.
+
+History may be session-only initially. Persistent history creates privacy and storage decisions.
+
+6. Wrapping
+~~~~~~~~~~~
+For a terminal width of 80 columns:
+
+    [ ] Follow up with John Doe regarding the updated information and confirm
+        the expected completion date.
+
+The editor must account for:
+
+- Marker width.
+- Cursor movement across wrapped lines.
+- Terminal resizing.
+- Unicode character display width.
+- Supporting-detail indentation.
+
+Unicode display width matters because character count and terminal-column width are not always identical.
+
+7. Testing
+~~~~~~~~~~
+Ordinary unit tests are not enough. The project needs tests for simulated key sequences, such as:
+
+    [
+    F
+    o
+    l
+    l
+    o
+    w
+    Enter
+
+Assertions should cover:
+
+- Final buffer.
+- Displayed marker.
+- Stored Markdown.
+- Cursor position.
+- Session continuity.
+
+Manual validation should cover:
+
+- Windows PowerShell.
+- Windows Terminal.
+- VS Code integrated terminal.
+- macOS Terminal or iTerm2.
+- Linux terminal.
+
+Recommended Architecture
+------------------------
+Do not build terminal editing from raw ANSI escape sequences. Use prompt_toolkit.
+
+A reasonable architecture is:
+
+    cli.py
+        Session and command routing
+
+    terminal.py
+        prompt_toolkit session
+        key bindings
+        display state
+        history
+
+    interaction.py
+        Raw text normalization
+        Existing AxNotes notation rules
+
+    renderer.py
+        Final entry and view rendering
+
+    completion.py
+        Slash-command suggestions
+
+This preserves the existing parser, notebook, metadata, reconciliation, and renderer instead of entangling terminal behavior with storage.
+
+Recommended Phased Implementation
+---------------------------------
+
+Terminal Phase 1: Safer replacement for input()
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Add prompt_toolkit.
+- Preserve current visible behavior.
+- Add reliable cursor editing.
+- Add session history.
+- Handle Ctrl+C and Ctrl+D cleanly.
+- Keep markers unchanged while typing.
+
+Terminal Phase 2: Command completion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Show suggestions after /.
+- Add keyboard selection.
+- Separate everyday and maintenance commands.
+- Keep unknown-command handling concise.
+
+Terminal Phase 3: Display-only marker prefixes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Detect the intended entry type.
+- Display [ ], [x], ?, !, or @ as a non-editable prefix.
+- Keep note text in the editable buffer.
+- Support switching marker types safely.
+
+Terminal Phase 4: Wrapped editing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Terminal-width-aware continuation indentation.
+- Cursor navigation across wrapped lines.
+- Correct Unicode display width.
+- Resize handling.
+
+Terminal Phase 5: Polish
+~~~~~~~~~~~~~~~~~~~~~~~~
+- Optional color.
+- No-color mode.
+- Persistent history decision.
+- Improved completion descriptions.
+- Accessibility and cross-platform validation.
+
+Recommendation for AxNotes Versions
+-----------------------------------
+Do not make the full terminal editor a requirement for v0.2.
+
+Recommended v0.2 scope:
+
+1. Remove duplicate capture output.
+2. Keep commands inline.
+3. Complete quick-entry notation.
+4. Add /md.
+5. Improve /help.
+6. Add view-level wrapped rendering.
+7. Add /lastweek and /month.
+8. Add welcome-note behavior.
+
+Schedule rich terminal editing as a separate milestone, potentially v0.3:
+
+    v0.2
+    Better interface behavior using the current terminal model
+
+    v0.3
+    Purpose-built interactive terminal editing
+
+This separation reduces risk. AxNotes can improve substantially in v0.2 without delaying those features until a small terminal editor has been designed, implemented, and tested.
+
+
+AxNotes and Jupyter: Conceptual Fit
+===================================
+
+Overview
+--------
+Jupyter is useful as a reference architecture, but it is not the best component to embed directly into AxNotes.
+
+The Jupyter ecosystem includes several different interfaces:
+
+1. Terminal IPython, an interactive terminal REPL.
+2. JupyterLab, a browser-based application.
+3. Jupyter Notebook, a cell-oriented browser interface.
+4. Jupyter kernels, separate processes that execute code.
+
+These components solve different problems, and only some are directly relevant to AxNotes.
+
+Terminal IPython: Highly Relevant
+---------------------------------
+Terminal IPython is the part most relevant to AxNotes. It uses a prompt-driven loop with history, multiline editing, completion, key bindings, and terminal interaction.
+
+More importantly, Terminal IPython uses prompt_toolkit, the same Python library recommended for a future AxNotes terminal interface.
+
+prompt_toolkit already provides:
+
+- Editable prompt sessions.
+- Command history.
+- Completion.
+- Multiline input.
+- Custom key bindings.
+- Unicode-width handling.
+- Mouse interaction.
+- Windows, macOS, and Linux terminal support.
+
+The useful relationship is:
+
+    Jupyter/IPython experience
+            ↓
+    prompt_toolkit infrastructure
+            ↓
+    AxNotes-specific terminal interface
+
+AxNotes should borrow the approach used by Terminal IPython, not Jupyter's code-execution model.
+
+JupyterLab: Probably Too Large
+------------------------------
+JupyterLab is a full browser application. Its text editing is provided through CodeMirror, and its architecture includes notebooks, cells, file editors, consoles, extensions, document registries, kernels, outputs, and browser-side state.
+
+Using this approach would likely change AxNotes into:
+
+    Python backend
+            +
+    local web server
+            +
+    browser frontend
+            +
+    JavaScript/TypeScript editor
+            +
+    client/server communication
+
+This is a much larger product direction than the current local terminal application.
+
+A browser interface could eventually provide:
+
+- True rich editing.
+- Clickable entries.
+- Visual task-state controls.
+- Side-by-side Markdown preview.
+- Search panels.
+- Calendar navigation.
+- Mouse selection.
+- Better accessibility.
+- Mobile or remote browser access.
+
+However, AxNotes would no longer be the small, direct CLI-first application currently envisioned.
+
+Jupyter Notebook's Cell Model: Conceptually Useful
+--------------------------------------------------
+The notebook cell concept offers one useful idea:
+
+    One independently identifiable content block
+
+That resembles an AxNotes entry:
+
+    Entry
+    ├── UUID
+    ├── Type
+    ├── Task state
+    ├── Text
+    ├── Details
+    └── Fingerprints
+
+A future AxNotes full-screen interface could treat each entry like a compact cell:
+
+    [ ] Follow up with John Doe
+        › Confirm the updated date
+
+Users could navigate between entries, change task state, edit text, or add details without directly editing the entire Markdown document.
+
+AxNotes already has its own domain model for this. AxNotes does not need Jupyter's notebook file format, kernel protocol, or code-execution system.
+
+What AxNotes Should Borrow from Jupyter
+---------------------------------------
+
+From Terminal IPython
+~~~~~~~~~~~~~~~~~~~~~
+Borrow:
+
+- PromptSession.
+- Input history.
+- Completion.
+- Custom key bindings.
+- Multiline editing.
+- Ctrl+C and Ctrl+D handling.
+- Session-oriented prompt ownership.
+- Testable key-input behavior.
+
+From JupyterLab
+~~~~~~~~~~~~~~~
+Borrow concepts only:
+
+- Separation between the content model and editor implementation.
+- Commands registered independently from the visual interface.
+- A status area for concise feedback.
+- Configurable keybindings.
+- Replaceable editor frontend.
+- A shared model powering multiple views.
+
+A useful AxNotes architecture would be:
+
+    Entry model
+        No terminal assumptions
+
+    Input controller
+        Converts keys and text into actions
+
+    Notebook service
+        Saves Markdown and metadata
+
+    Renderer
+        Produces terminal display
+
+    Terminal frontend
+        prompt_toolkit initially
+
+    Possible future frontend
+        Desktop or browser interface
+
+What AxNotes Should Not Borrow
+------------------------------
+Avoid adding:
+
+- Jupyter kernels.
+- ZeroMQ messaging.
+- Code execution.
+- Notebook cells as a new storage format.
+- .ipynb files.
+- A web server solely for terminal editing.
+- JupyterLab's JavaScript build system.
+- CodeMirror unless AxNotes intentionally becomes a browser application.
+
+These components address interactive computation, not local bullet-note capture.
+
+Could AxNotes Become a JupyterLab Extension?
+--------------------------------------------
+Technically, yes. A future extension could show AxNotes alongside notebooks.
+
+However, this would:
+
+- Limit the audience to JupyterLab users.
+- Require TypeScript.
+- Require CodeMirror and Jupyter extension integration.
+- Require synchronization with the Python notebook service.
+- Create a separate deployment and compatibility burden.
+
+This would be a separate integration project, not a shortcut for the main AxNotes interface.
+
+Recommended Combination
+-----------------------
+Use this combination:
+
+    Micro
+        UX inspiration and familiar keybindings
+
+    Nano
+        Simplicity and visible shortcut hints
+
+    Terminal IPython
+        Proven Python prompt/session model
+
+    prompt_toolkit
+        Actual terminal infrastructure
+
+    AxNotes
+        Entry types, Markdown, metadata,
+        reconciliation, search, and commands
+
+Recommended Phased Plan
+-----------------------
+
+AxNotes v0.2
+~~~~~~~~~~~~
+Continue with the existing terminal model:
+
+- Remove duplicate capture output.
+- Complete quick-entry notation.
+- Add /md.
+- Improve /help.
+- Add wrapped rendered views.
+- Add /lastweek.
+- Add /month.
+- Add the welcome note and /clearwelcome.
+
+AxNotes v0.3 Foundation
+~~~~~~~~~~~~~~~~~~~~~~~
+Introduce prompt_toolkit.PromptSession:
+
+- Reliable editing.
+- Session history.
+- Ctrl+C and Ctrl+D handling.
+- Slash-command completion.
+- Existing markers still typed normally.
+
+AxNotes v0.3 Advanced Interface
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Add:
+
+- Display-only normalized markers.
+- In-place marker transformation.
+- Wrapped editing.
+- Cursor mapping.
+- Optional status toolbar.
+- Better command discovery.
+
+Conclusion
+----------
+Jupyter helps confirm that prompt_toolkit is the right direction. Terminal IPython is a useful implementation reference. JupyterLab and CodeMirror would be valuable only if AxNotes later becomes a browser-based or full-screen graphical application.
+
+The most efficient path is:
+
+    Use Jupyter/IPython's prompt architecture,
+    not Jupyter's notebook or kernel platform.

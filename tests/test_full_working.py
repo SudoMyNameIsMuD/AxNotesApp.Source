@@ -2,6 +2,7 @@ import sqlite3
 from datetime import date
 from uuid import UUID
 
+from AxNotes.cli import interactive
 from AxNotes.fingerprints import fingerprint_entry
 from AxNotes.index import rebuild, search
 from AxNotes.interaction import normalize_detail, normalize_entry
@@ -59,6 +60,39 @@ def test_sqlite_connection_is_released(tmp_path):
     assert search(value, "Needle")
     value.index_path.unlink()
     assert not value.index_path.exists()
+
+
+def test_inline_capture_writes_one_markdown_entry_and_no_duplicate_render(tmp_path):
+    value = notebook(tmp_path)
+    outputs = []
+    raw_inputs = iter(["hello", "/quit"])
+    interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
+
+    lines = value.note_path(date.today()).read_text(encoding="utf-8").splitlines()
+    entry_lines = [line for line in lines if line.startswith("- ") or line.startswith("! ") or line.startswith("? ")]
+    assert len(entry_lines) == 1
+    assert entry_lines[0].endswith("hello")
+    assert all("hello" not in item for item in outputs if isinstance(item, str))
+
+
+def test_inline_capture_prints_validation_errors(tmp_path):
+    value = notebook(tmp_path)
+    outputs = []
+    raw_inputs = iter(["-", "/quit"])
+    interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
+
+    assert any("Entry text cannot be empty." in item for item in outputs)
+
+
+def test_commands_render_inline_then_return_to_prompt(tmp_path):
+    value = notebook(tmp_path)
+    value.append("Visible note", day=date.today())
+    outputs = []
+    raw_inputs = iter(["/today", "/quit"])
+    interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
+
+    assert any("Visible note" in item for item in outputs)
+    assert outputs[-1] == "AxNotes closed."
 
 
 def test_rebuild_from_markdown_and_metadata_preserves_identity(tmp_path):
