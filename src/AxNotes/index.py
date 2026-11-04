@@ -1,6 +1,7 @@
 import sqlite3
 from contextlib import closing
 
+from .metadata import MetadataNotFoundError, load_metadata
 from .parser import parse_file
 
 SCHEMA = """
@@ -10,12 +11,14 @@ CREATE TABLE IF NOT EXISTS files(
  size INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS entries(
- id INTEGER PRIMARY KEY,
+ id TEXT,
  type TEXT NOT NULL,
  text TEXT NOT NULL,
  task_state TEXT,
  source_file TEXT NOT NULL,
- line_number INTEGER NOT NULL
+ line_number INTEGER NOT NULL,
+ source_date TEXT,
+ ordinal INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_entries_text ON entries(text);
 """
@@ -33,18 +36,39 @@ def files(notebook):
     return sorted(notebook.notes_dir.glob("*.md"))
 
 
+def metadata_for_file(notebook, path):
+    relative = str(path.relative_to(notebook.root)).replace("\\", "/")
+    sidecar = notebook.metadata_dir / relative.replace(".md", ".json")
+    if not sidecar.exists():
+        return {}
+    try:
+        metadata = load_metadata(sidecar)
+    except MetadataNotFoundError:
+        return {}
+    return {entry.ordinal: str(entry.id) for entry in metadata.entries if entry.source == relative}
+
+
 def replace(db, notebook, path):
-    relative = str(path.relative_to(notebook.root))
+    relative = str(path.relative_to(notebook.root)).replace("\\", "/")
     stat = path.stat()
     db.execute("DELETE FROM entries WHERE source_file=?", (relative,))
     db.execute("INSERT OR REPLACE INTO files VALUES(?,?,?)", (relative, stat.st_mtime_ns, stat.st_size))
+    metadata_map = metadata_for_file(notebook, path)
     count = 0
     for line_number, entry in enumerate(parse_file(path), 1):
+        entry_id = metadata_map.get(line_number)
         db.execute(
-            "INSERT INTO entries(type,text,task_state,source_file,line_number) VALUES(?,?,?,?,?)",
-            (entry.entry_type.value, entry.text,
-             entry.task_state.value if entry.task_state else None,
-             relative, line_number),
+            "INSERT INTO entries(id,type,text,task_state,source_file,line_number,source_date,ordinal) VALUES(?,?,?,?,?,?,?,?)",
+            (
+                entry_id,
+                entry.entry_type.value,
+                entry.text,
+                entry.task_state.value if entry.task_state else None,
+                relative,
+                line_number,
+                None,
+                line_number,
+            ),
         )
         count += 1
     return count

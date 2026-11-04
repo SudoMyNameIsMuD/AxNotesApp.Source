@@ -157,11 +157,18 @@ The notebook layer now:
 - refreshes SQLite only after metadata saves succeed.
 - keeps Markdown unchanged during ordinary reconciliation.
 
-### Step 8: Metadata-aware indexing
+### Step 8: Metadata-aware indexing — Complete
 
-- Store UUIDs as derived index fields.
-- Rebuild SQLite entirely from Markdown plus durable metadata.
-- Confirm deleting SQLite never loses user content or identity.
+Implemented in:
+
+- `src/AxNotes/index.py`
+- `tests/test_full_working.py`
+
+The SQLite index now:
+
+- stores UUIDs as derived index fields.
+- rebuilds from Markdown plus durable metadata.
+- preserves user content and identity when the SQLite file is deleted and rebuilt.
 
 ### P0 exit criteria
 

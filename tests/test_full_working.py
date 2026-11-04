@@ -1,8 +1,12 @@
+import sqlite3
 from datetime import date
+from uuid import UUID
 
+from AxNotes.fingerprints import fingerprint_entry
 from AxNotes.index import rebuild, search
 from AxNotes.interaction import normalize_detail, normalize_entry
-from AxNotes.models import EntryType, TaskState
+from AxNotes.metadata import MetadataEntry, MetadataFile, write_metadata
+from AxNotes.models import Entry, EntryType, TaskState
 from AxNotes.notebook import Notebook
 from AxNotes.renderer import render_entry
 
@@ -55,3 +59,40 @@ def test_sqlite_connection_is_released(tmp_path):
     assert search(value, "Needle")
     value.index_path.unlink()
     assert not value.index_path.exists()
+
+
+def test_rebuild_from_markdown_and_metadata_preserves_identity(tmp_path):
+    value = notebook(tmp_path)
+    day = date(2026, 11, 4)
+    value.append("Keep me", day=day)
+    sidecar = value.metadata_path_for_note(value.note_path(day))
+    fingerprints = fingerprint_entry(Entry(EntryType.NOTE, "Keep me"))
+    identity = UUID("12345678-1234-5678-1234-567812345678")
+    write_metadata(
+        sidecar,
+        MetadataFile(
+            schema_version=1,
+            entries=(
+                MetadataEntry(
+                    id=identity,
+                    source=f"notes/{day.isoformat()}.md",
+                    source_date=day,
+                    ordinal=1,
+                    fingerprints={
+                        "full": fingerprints.full,
+                        "content": fingerprints.content,
+                        "parent": fingerprints.parent,
+                        "text": fingerprints.text,
+                    },
+                ),
+            ),
+        ),
+    )
+
+    value.index_path.unlink(missing_ok=True)
+    count = rebuild(value)
+    assert count == 1
+    with sqlite3.connect(value.index_path) as db:
+        row = db.execute("SELECT id, text FROM entries WHERE source_file=?", (f"notes/{day.isoformat()}.md",)).fetchone()
+    assert row[0] == str(identity)
+    assert row[1] == "Keep me"
