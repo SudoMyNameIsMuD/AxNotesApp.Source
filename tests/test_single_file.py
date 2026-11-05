@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from AxNotes.cli import capture_inline_entry, main
+from AxNotes.cli import capture_inline_entry, interactive, main
 from AxNotes.index import rebuild, search
 from AxNotes.index import sync as sync_index
 from AxNotes.metadata import load_metadata
@@ -94,6 +94,30 @@ def test_single_file_capture_writes_atomically_and_syncs_metadata(tmp_path):
     metadata = load_metadata(notebook.single_file_metadata_path)
     assert len(metadata.entries) == 2
     assert rebuild(notebook) == 2
+
+
+def test_single_file_interactive_capture_renders_in_cli(tmp_path):
+    notebook = initialized_notebook(tmp_path)
+    config = (tmp_path / "AxNotes.toml").read_text(encoding="utf-8")
+    (tmp_path / "AxNotes.toml").write_text(
+        config.replace('version = "0.1"', 'version = "0.1"\nformat = "single-file"'),
+        encoding="utf-8",
+    )
+    outputs = []
+    raw_inputs = iter(["Visible in CLI", "/quit"])
+
+    assert (
+        interactive(
+            notebook,
+            input_fn=lambda prompt="- ": next(raw_inputs),
+            output_fn=outputs.append,
+        )
+        == 0
+    )
+
+    rendered_outputs = [output for output in outputs if "Visible in CLI" in output]
+    assert len(rendered_outputs) == 1
+    assert " -  Visible in CLI" in rendered_outputs[0]
 
 
 def test_single_file_inserts_entries_under_their_date_in_chronological_order(tmp_path):

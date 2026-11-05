@@ -7,6 +7,8 @@
 - Added explicit `AxNotes migrate single-file` migration with retained source and metadata/configuration backups, durable identity preservation, rollback, and a rebuildable single-file index.
 - Added atomic Markdown writing and date-aware loading, appending, and rendering for migrated single-file notebooks.
 - Synchronize metadata and the derived index after supporting-detail capture.
+- Completed quick-entry normalization for all task states and entry types, preserving natural sentence-ending question marks and rejecting empty markers.
+- Redraw the remembered `/today` or `/week` view after every successful entry capture.
 
 ## 0.1.6 Full Working Build
 - Restored the interactive writing CLI on top of the new `notes/` storage architecture.

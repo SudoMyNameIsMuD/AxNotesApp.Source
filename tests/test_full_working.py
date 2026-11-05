@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from AxNotes.cli import interactive
@@ -66,7 +66,7 @@ def test_sqlite_connection_is_released(tmp_path):
     assert not value.index_path.exists()
 
 
-def test_inline_capture_writes_one_markdown_entry_and_no_duplicate_render(tmp_path):
+def test_inline_capture_writes_one_markdown_entry_and_renders_default_today_view(tmp_path):
     value = notebook(tmp_path)
     outputs = []
     raw_inputs = iter(["hello", "/quit"])
@@ -76,7 +76,9 @@ def test_inline_capture_writes_one_markdown_entry_and_no_duplicate_render(tmp_pa
     entry_lines = [line for line in lines if line.startswith(("- ", "! ", "? "))]
     assert len(entry_lines) == 1
     assert entry_lines[0].endswith("hello")
-    assert all("hello" not in item for item in outputs if isinstance(item, str))
+    rendered_outputs = [item for item in outputs if "hello" in item]
+    assert len(rendered_outputs) == 1
+    assert " -  hello" in rendered_outputs[0]
 
 
 def test_inline_capture_prints_validation_errors(tmp_path):
@@ -97,6 +99,19 @@ def test_commands_render_inline_then_return_to_prompt(tmp_path):
 
     assert any("Visible note" in item for item in outputs)
     assert outputs[-1] == "AxNotes closed."
+
+
+def test_capture_rerenders_the_last_week_view(tmp_path):
+    value = notebook(tmp_path)
+    today = date.today()
+    value.append("Earlier this week", day=today - timedelta(days=1))
+    outputs = []
+    raw_inputs = iter(["/week", "New week entry", "/quit"])
+    interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
+
+    rendered_outputs = [item for item in outputs if "Earlier this week" in item]
+    assert len(rendered_outputs) == 2
+    assert all("New week entry" in item for item in rendered_outputs[1:])
 
 
 def test_help_and_index_commands_use_standardized_terminology(tmp_path):

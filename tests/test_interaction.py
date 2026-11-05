@@ -149,6 +149,42 @@ def test_quick_entry_normalization_and_canonical_markdown(
 
 
 @pytest.mark.parametrize(
+    ("raw", "task_state", "markdown"),
+    [
+        ("[ Follow up with John Doe", TaskState.OPEN, "[ ] Follow up with John Doe"),
+        ("[ ] Follow up with John Doe", TaskState.OPEN, "[ ] Follow up with John Doe"),
+        ("[/ Follow up with John Doe", TaskState.IN_PROGRESS, "[/] Follow up with John Doe"),
+        ("[/] Follow up with John Doe", TaskState.IN_PROGRESS, "[/] Follow up with John Doe"),
+        ("Follow up with John Doe [/ ", TaskState.IN_PROGRESS, "[/] Follow up with John Doe"),
+        ("Follow up with John Doe [/] ", TaskState.IN_PROGRESS, "[/] Follow up with John Doe"),
+        ("[x Follow up with John Doe", TaskState.DONE, "[x] Follow up with John Doe"),
+        ("[x] Follow up with John Doe", TaskState.DONE, "[x] Follow up with John Doe"),
+        ("Follow up with John Doe [x", TaskState.DONE, "[x] Follow up with John Doe"),
+        ("Follow up with John Doe [x]", TaskState.DONE, "[x] Follow up with John Doe"),
+        ("[> Follow up with John Doe", TaskState.MIGRATED, "[>] Follow up with John Doe"),
+        ("[>] Follow up with John Doe", TaskState.MIGRATED, "[>] Follow up with John Doe"),
+        ("Follow up with John Doe [>", TaskState.MIGRATED, "[>] Follow up with John Doe"),
+        ("Follow up with John Doe [>]", TaskState.MIGRATED, "[>] Follow up with John Doe"),
+        ("[- Follow up with John Doe", TaskState.CANCELED, "[-] Follow up with John Doe"),
+        ("[-] Follow up with John Doe", TaskState.CANCELED, "[-] Follow up with John Doe"),
+        ("Follow up with John Doe [-", TaskState.CANCELED, "[-] Follow up with John Doe"),
+        ("Follow up with John Doe [-]", TaskState.CANCELED, "[-] Follow up with John Doe"),
+    ],
+)
+def test_task_shortcuts_normalize_to_canonical_markdown(tmp_path, raw, task_state, markdown):
+    entry_type, text, normalized_state = normalize_entry(raw)
+    assert entry_type is EntryType.TASK
+    assert text == "Follow up with John Doe"
+    assert normalized_state is task_state
+
+    notebook = Notebook(tmp_path)
+    notebook.initialize()
+    capture_inline_entry(notebook, raw)
+    stored = notebook.note_path(date.today()).read_text(encoding="utf-8")
+    assert stored.splitlines().count(markdown) == 1
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         "",
@@ -172,6 +208,17 @@ def test_empty_quick_entry_notation_is_rejected(raw):
     else:
         with pytest.raises(ValueError):
             normalize_entry(raw)
+
+
+@pytest.mark.parametrize("raw", ["[", "[x", "[/", "[>", "[-", "!", "?", "@", ">"])
+def test_empty_markers_do_not_create_entries(tmp_path, raw):
+    notebook = Notebook(tmp_path)
+    notebook.initialize()
+
+    with pytest.raises(ValueError):
+        capture_inline_entry(notebook, raw)
+
+    assert not list(notebook.notes_dir.glob("*.md"))
 
 
 @pytest.mark.parametrize(

@@ -81,15 +81,19 @@ Inside AxNotes, quick-entry notation currently includes:
 
 - Plain text creates a normal note.
 - Leading `[` or `[ ]` creates an open task.
+- Leading or trailing `[/` or `[/]` creates an in-progress task.
 - Leading or trailing `[x` or `[x]` creates a completed task.
-- Leading or trailing `!` creates an important entry.
-- Leading or trailing `?` creates a question.
-- Leading or trailing `>` creates a supporting detail.
+- Leading or trailing `[>` or `[>]` creates a migrated task.
+- Leading or trailing `[-` or `[-]` creates a canceled task.
+- Leading or whitespace-separated trailing `!` creates an important entry.
+- Leading or whitespace-separated trailing `?` creates a question. A natural sentence-ending question mark without preceding whitespace is preserved as entry text.
+- Leading or whitespace-separated trailing `@` marks an event entry. Event-section formatting is a later roadmap step.
+- Leading or whitespace-separated trailing `>` creates a supporting detail.
 - `/` displays commands
 
 AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker. AxNotes places the canonical Markdown marker at the beginning of the stored entry. Trailing quick-entry notation is removed from the entry text during normalization. The CLI adds presentation spacing to form the rendered marker; alignment is not stored in Markdown.
 
-After capture, AxNotes returns to the writing prompt without printing a second rendered copy of the entry.
+After a successful capture, AxNotes redraws the most recently requested `/today` or `/week` view before returning to the writing prompt. Until either view is requested, it redraws `/today`. This shows the saved entry in context without printing a separate duplicate line. Other commands do not change the remembered view.
 
 ## Commands
 

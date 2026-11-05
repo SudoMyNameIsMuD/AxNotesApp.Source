@@ -280,11 +280,11 @@ Important distinctions:
 
 #### Step 3: Complete Quick-Entry Notation
 
-- Implement all notation in the table above.
-- Convert notation into canonical Markdown structure.
-- Remove trailing shortcuts from entry text.
-- Preserve meaningful punctuation and internal marker characters.
-- Reject empty markers without creating entries.
+- Complete: implement all entry and task-state notation in the table above.
+- Complete: normalize accepted notation into canonical Markdown markers and entry text.
+- Complete: remove trailing shortcuts from entry text while preserving meaningful punctuation and internal marker characters.
+- Complete: reject empty markers without creating entries.
+- Event-section formatting and generated timestamps remain Step 6.
 
 #### Step 4: Headings and Dividers
 

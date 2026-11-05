@@ -98,12 +98,19 @@ def capture_inline_entry(notebook, raw, day=None):
     return render_entry(normalized)
 
 
+def render_view(notebook, view, output_fn=print):
+    if view == "week":
+        output_fn("\n" + notebook.render_week(date.today(), render_entry) + "\n")
+    else:
+        output_fn("\n" + notebook.render_day(date.today(), render_entry) + "\n")
+
+
 def handle_command(notebook, raw, output_fn=print, input_fn=input):
     command, _, argument = raw.partition(" ")
     if command == "/today":
-        output_fn("\n" + notebook.render_day(date.today(), render_entry) + "\n")
+        render_view(notebook, "today", output_fn)
     elif command == "/week":
-        output_fn("\n" + notebook.render_week(date.today(), render_entry) + "\n")
+        render_view(notebook, "week", output_fn)
     elif command == "/search":
         query = argument.strip() or input_fn("Search: ").strip()
         if query:
@@ -131,6 +138,7 @@ def interactive(notebook, input_fn=input, output_fn=print):
         )
         return 2
     output_fn(f"AxNotes\n\n{notebook.heading(date.today())}\n")
+    last_view = "today"
     while True:
         try:
             raw = input_fn("- ")
@@ -143,11 +151,16 @@ def interactive(notebook, input_fn=input, output_fn=print):
             if not handle_command(notebook, raw.strip(), output_fn=output_fn, input_fn=input_fn):
                 output_fn("AxNotes closed.")
                 return 0
+            command = raw.strip().partition(" ")[0]
+            if command in {"/today", "/week"}:
+                last_view = command[1:]
             continue
         try:
             capture_inline_entry(notebook, raw)
         except ValueError as exc:
             output_fn(str(exc))
+        else:
+            render_view(notebook, last_view, output_fn)
 
 
 def parser():
