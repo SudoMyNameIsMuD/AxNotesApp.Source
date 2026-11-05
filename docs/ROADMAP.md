@@ -75,57 +75,212 @@
 
 ### v0.2: Interface Improvement Roadmap
 
-Each step includes implementation, tests, help/documentation updates, and regression validation.
+AxNotes v0.2 will improve the writing-first CLI while preserving the durable identity, metadata, reconciliation, and indexing foundation completed during P0.
 
-#### 1. Inline rendering flow
+Each interface step includes implementation, regression tests, help updates, and documentation updates.
 
-- Render each normalized entry immediately after capture.
-- Return to the writing prompt after entries and commands.
-- Use the shared renderer for interactive output and command views.
-- Keep UUIDs, metadata paths, SQLite details, and internal state out of user-facing output.
-- Show concise validation messages without ending the session or exposing a traceback.
+#### AxNotes Key
 
-#### 2. Complete quick-entry notation
-
-Support consistent notation:
+The AxNotes Key shows how each entry type appears in the CLI after rendering.
 
 ```text
-text    Normal note
-[       Open task
-[/      In-progress task
-[x      Completed task
-[>      Migrated task
-[-      Canceled task
-?       Question
-!       Important entry
-@       Event
->       Supporting detail
+ -  Normal note
+[ ] Open task
+[/] In-progress task
+[x] Completed task
+[>] Migrated task
+[-] Canceled task
+ ?  Question
+ !  Important entry
+ @  Event
+     › Supporting detail
 ```
 
-- Support explicit leading task markers and trailing task-state shorthand.
-- Remove control markers from normalized entry text.
+#### Quick-Entry Notation
+
+Quick-entry notation is the abbreviated syntax accepted while capturing an entry. AxNotes normalizes that input into an entry type, task state when applicable, entry text, and canonical Markdown marker.
+
+| Entry type | Accepted quick-entry notation | Shortest shortcut | Markdown marker | Rendered marker | Example quick entry |
+|---|---|---|---|---|---|
+| Normal note | Plain text | Plain text | `-` | ` - ` | `Follow up with John Doe` |
+| Open task | Leading `[` or `[ ]` | `[` | `[ ]` | `[ ]` | `[Follow up with John Doe` |
+| In-progress task | Leading or trailing `[/` or `[/]` | `[/` | `[/]` | `[/]` | `Follow up with John Doe [/` |
+| Completed task | Leading or trailing `[x` or `[x]` | `[x` | `[x]` | `[x]` | `Follow up with John Doe [x` |
+| Migrated task | Leading or trailing `[>` or `[>]` | `[>` | `[>]` | `[>]` | `Follow up with John Doe [>` |
+| Canceled task | Leading or trailing `[-` or `[-]` | `[-` | `[-]` | `[-]` | `Follow up with John Doe [-` |
+| Question | Leading or trailing `?` | `?` | `?` | ` ? ` | `Does John Doe have the update?` |
+| Important entry | Leading or trailing `!` | `!` | `!` | ` ! ` | `John Doe needs the final report !` |
+| Event | Leading or trailing `@` | `@` | `@` | ` @ ` | `Meeting with John Doe @` |
+| Supporting detail | Leading or trailing `>` | `>` | `  ›` | `     ›` | `Confirm the due date >` |
+
+##### Important distinctions
+
+- `>` identifies a supporting detail.
+- `[>` or `[>]` identifies a migrated task.
+- `[` is the shortest shortcut for an open task.
+- The closing `]` may be omitted when using task-state shorthand.
+- AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker.
+- AxNotes places the canonical Markdown marker at the beginning of the stored entry.
+- Trailing quick-entry notation is removed from the entry text during normalization.
+- The CLI applies presentation spacing to produce the rendered marker.
+- Display alignment is not written into Markdown solely for appearance.
+
+##### Normalization example
+
+```text
+Captured input:
+Follow up with John Doe [x
+
+Normalized entry:
+Entry type: Task
+Task state: Completed
+Entry text: Follow up with John Doe
+
+Stored Markdown:
+[x] Follow up with John Doe
+
+Rendered CLI output:
+[x] Follow up with John Doe
+```
+
+Supporting-detail example:
+
+```text
+Captured input:
+Confirm the due date >
+
+Normalized entry:
+Entry type: Supporting detail
+Entry text: Confirm the due date
+
+Stored Markdown:
+  › Confirm the due date
+
+Rendered CLI output:
+     › Confirm the due date
+```
+
+#### Terminology Glossary
+
+| Term | Definition |
+|---|---|
+| **Entry** | One AxNotes content item, such as a normal note, task, question, important entry, event, or supporting detail. |
+| **Entry type** | The semantic category assigned to an entry: normal note, task, question, important entry, event, or supporting detail. |
+| **Task state** | The condition of a task: open, in progress, completed, migrated, or canceled. |
+| **Entry text** | The user-written content after quick-entry notation has been interpreted and removed from the text. |
+| **Quick-entry notation** | Any abbreviated syntax AxNotes accepts while the user captures an entry. |
+| **Shortcut** | The shortest accepted quick-entry notation for an entry type or task state. |
+| **Normalization** | The process that converts quick-entry notation into the canonical entry type, task state, entry text, and Markdown marker. |
+| **Markdown marker** | The canonical marker written to the authoritative Markdown file. |
+| **Rendered marker** | The marker and presentation spacing displayed in the CLI. |
+| **Supporting detail** | A subordinate line attached to the preceding top-level entry. Supporting details use `›` in Markdown and rendered views. |
+| **Writing prompt** | The `- ` prompt where the user captures an entry or enters a slash command. |
+| **Inline command output** | Command results displayed inside the active AxNotes session before returning to the writing prompt. |
+| **Authoritative Markdown** | The files under `notes/` that remain the source of truth for entry text, entry type, task state, supporting details, and order. |
+| **Metadata sidecar** | A JSON file under `.AxNotes/metadata/` that stores durable identity and fingerprints without adding visible UUIDs to Markdown. |
+| **Durable identity** | The UUID that allows AxNotes to recognize the same logical entry after supported changes. |
+| **Derived index** | The rebuildable SQLite database used for fast search. The index is recreated from Markdown and metadata when needed. |
+
+#### Terminology Structure
+
+Use this hierarchy consistently in the roadmap, README, `/help`, code comments, and tests:
+
+```text
+Entry
+├── Entry type
+├── Task state, when applicable
+├── Entry text
+└── Supporting details
+
+Input terminology
+├── Quick-entry notation
+└── Shortcut
+
+Output terminology
+├── Markdown marker
+└── Rendered marker
+```
+
+#### 1. Prompt Continuity and Inline Command Output
+
+The current CLI uses Python's plain `input()` function. The terminal already echoes captured input, so AxNotes must not print a second copy after saving the entry.
+
+Required capture flow:
+
+```text
+Capture input
+    ↓
+Normalize and validate
+    ↓
+Write authoritative Markdown
+    ↓
+Synchronize metadata
+    ↓
+Refresh the derived index
+    ↓
+Return to the writing prompt
+```
+
+Requirements:
+
+- Do not print a normalized second copy after successful capture.
+- Continue displaying concise validation messages.
+- Continue rendering command results inside the active session.
+- Return to the writing prompt after entries and commands.
+- Keep UUIDs, metadata paths, SQLite details, and internal state out of normal user output.
+- Do not expose Python tracebacks during ordinary use.
+
+Commands that continue to produce inline command output include:
+
+```text
+/today
+/week
+/search
+/help
+/reindex
+/sync
+```
+
+True in-place replacement of raw quick-entry notation with a rendered marker is deferred until the future rich terminal-editing milestone.
+
+#### 2. Complete Quick-Entry Notation
+
+Implement and test all quick-entry notation shown in the table above.
+
+Requirements:
+
+- Support all five task states.
+- Support leading and trailing task-state notation.
+- Support questions, important entries, events, and supporting details.
+- Convert quick-entry notation into the canonical Markdown marker.
+- Remove trailing shortcuts from entry text.
 - Preserve ordinary punctuation and meaningful text.
 - Reject empty markers without creating empty entries.
-
-Example:
-
-```text
-- [Follow up with John Doe
-[ ] Follow up with John Doe
--
-```
+- Preserve the existing Markdown storage format.
 
 #### 3. `/markdown` and `/md`
 
+Add two equivalent commands:
+
+```text
+/markdown
+/md
+```
+
+Requirements:
+
 - Open today's Markdown file in the operating system's default Markdown application.
-- Create today's file first when it does not exist.
-- Keep the interactive AxNotes session running.
+- Create today's Markdown file first if it does not exist.
+- Keep AxNotes running after the file opens.
+- Return to the writing prompt.
+- Support paths containing spaces.
 - Support Windows, macOS, and Linux without requiring Visual Studio Code.
-- Report launch failures with a concise message rather than a traceback.
+- Display a concise error instead of a traceback if the file cannot be opened.
+- Mock the operating-system opener during automated tests.
 
 #### 4. Improved `/help`
 
-Organize help into:
+Organize help into clear sections:
 
 ```text
 Writing
@@ -134,48 +289,105 @@ Maintenance
 Planned
 ```
 
-- Show every active marker and command.
+Requirements:
+
+- Use terminology from the glossary.
+- Show active quick-entry notation and shortcuts.
+- Explain Markdown markers separately from rendered markers when needed.
 - Keep maintenance commands separate from everyday commands.
-- Do not present planned commands as available until implemented.
+- Do not present planned commands as available.
+- Keep `/help`, the roadmap, and later README documentation consistent.
 
-#### 5. Wrapped rendering
+#### 5. Wrapped Rendering
 
-- Wrap long entries to the terminal width.
+Add terminal-width-aware wrapping to rendered output.
+
+Top-level example:
+
+```text
+[ ] Follow up with John Doe regarding the updated information and confirm
+    the expected completion date.
+```
+
+Supporting-detail example:
+
+```text
+     › Include the supporting information requested during the meeting
+       and note any remaining open items.
+```
+
+Requirements:
+
 - Align top-level continuation lines beneath entry text.
-- Align detail continuation lines beneath detail text.
-- Apply the same wrapping to inline output, `/today`, `/week`, `/search`, and standalone rendering.
-- Keep alignment padding out of authoritative Markdown.
+- Align supporting-detail continuation lines beneath detail text.
+- Apply the same rules to `/today`, `/week`, `/search`, and standalone rendering.
+- Preserve entry order and parent-detail relationships.
+- Keep display alignment out of authoritative Markdown.
+- Defer cursor-aware wrapped editing until the future rich terminal interface.
 
 #### 6. `/lastweek`
 
+Add:
+
+```text
+/lastweek
+```
+
+Requirements:
+
 - Display the previous Monday through Sunday.
-- Group entries by date.
-- Preserve supporting details beneath parents.
+- Group entries chronologically by date.
+- Preserve entry order within each date.
+- Keep supporting details attached to their parent entries.
 - Reuse the shared renderer and time-view formatting.
+- Return to the writing prompt.
 
 #### 7. `/month`
 
-- Display the current calendar month grouped chronologically by date.
+Add:
+
+```text
+/month
+```
+
+Requirements:
+
+- Display the current calendar month.
+- Group entries chronologically by date.
 - Preserve entry order and parent-detail relationships.
-- Begin with a reliable calendar-month view rather than an automated summary.
+- Reuse the shared renderer.
+- Begin with a reliable monthly view rather than an automated summary.
+- Return to the writing prompt.
 
-#### 8. Welcome note and `/clearwelcome`
+#### 8. Welcome Note and `/clearwelcome`
 
-- Create an example welcome note only when initializing a genuinely empty notebook.
-- Demonstrate all active markers and key commands using neutral examples such as John Doe.
-- Mark generated content with `axnotes_welcome: true` in frontmatter.
-- Add `/clearwelcome` to remove an unchanged generated welcome note, its metadata sidecar, and derived index entries.
-- Refuse automatic deletion when user content has been added or generated content has been modified.
-- Never overwrite an existing note or add welcome content to an established notebook.
+When `AxNotes init` creates a genuinely empty notebook, create a welcome note demonstrating all active entry types, task states, quick-entry notation, and key commands.
 
-#### v0.2 completion target
+Requirements:
 
-- All eight interface steps implemented.
-- Consistent inline and command rendering.
-- Clean Markdown remains UUID-free.
+- Use neutral examples such as John Doe.
+- Mark the generated note with `axnotes_welcome: true` in frontmatter.
+- Never overwrite an existing note.
+- Never add welcome content to an established notebook.
+- Add `/clearwelcome` to remove an unchanged generated welcome note.
+- Remove the associated metadata sidecar and refresh the derived index.
+- Keep AxNotes running after removal.
+- Refuse automatic deletion if generated content was modified or user content was added.
+- Direct the user to `/md` for manual editing when automatic removal is refused.
+
+#### v0.2 Completion Target
+
+AxNotes v0.2 is complete when:
+
+- All eight interface steps are implemented.
+- Quick-entry terminology is consistent across the roadmap, `/help`, tests, and documentation.
+- Inline command output and writing-prompt continuity work reliably.
+- Markdown markers and rendered markers remain clearly separated.
+- Authoritative Markdown remains clean and contains no visible UUID comments.
 - Ruff, pytest, and Git whitespace checks pass.
-- Help, roadmap, changelog, and user documentation are updated with each step.
-- Windows validation complete, with macOS and Linux validation where OS behavior differs.
+- Regression tests cover each notation form, command, view, and safety rule.
+- Windows validation is complete.
+- macOS and Linux validation is completed where operating-system behavior differs.
 
 ### Future Identity-backed Entry Operations
 

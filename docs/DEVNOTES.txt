@@ -587,3 +587,201 @@ The most efficient path is:
 
     Use Jupyter/IPython's prompt architecture,
     not Jupyter's notebook or kernel platform.
+
+AxNotes Plugin Host Options
+===========================
+
+Overview
+--------
+Several applications could host an AxNotes plugin or integration. The strongest candidates are Visual Studio Code, Obsidian, Logseq, Neovim, and Sublime Text.
+
+The recommended architecture is to keep AxNotes as the independent core application and build thin plugin adapters around a stable CLI or Python API.
+
+1. Visual Studio Code Extension
+-------------------------------
+Visual Studio Code is the most practical first integration for the current AxNotes workflow because AxNotes development already uses Visual Studio Code, PowerShell, Python, Markdown, and Git.
+
+A Visual Studio Code extension could provide:
+
+- AxNotes: Open Today
+- AxNotes: Add Entry
+- AxNotes: Add Task
+- AxNotes: Complete Task
+- AxNotes: Search Notebook
+- AxNotes: Sync Metadata
+- A date-grouped tree view
+- Task-state buttons beside Markdown entries
+- AxNotes marker highlighting
+- A status-bar shortcut to today's note
+
+Recommended architecture:
+
+    Visual Studio Code extension
+        User interface and editor integration
+            ↓
+    AxNotes CLI or Python service
+        Markdown, metadata, reconciliation, indexing
+            ↓
+    AxNotes notebook
+
+Fit: Excellent
+New technology required: TypeScript
+Recommended timing: After the standalone interface is stable
+
+2. Obsidian Plugin
+------------------
+Obsidian is a natural functional fit because it is Markdown-based and supports community plugins.
+
+An AxNotes plugin could add:
+
+- AxNotes task-state controls
+- Daily-note integration
+- Search driven by AxNotes metadata
+- Commands for today, week, last week, and month
+- Entry identity preservation when notes are edited
+- A custom view for open tasks and questions
+- Metadata synchronization after Obsidian edits
+
+Main concern:
+
+Both Obsidian and AxNotes would edit the same Markdown. The integration would need clear ownership rules so Obsidian does not rewrite Markdown in a way that conflicts with AxNotes reconciliation.
+
+Fit: Excellent for Markdown note-taking users
+New technology required: TypeScript
+Risk: Competing Markdown conventions and plugin lifecycle behavior
+
+3. Logseq Plugin
+----------------
+Logseq is conceptually close because its interface is block-oriented. An AxNotes entry maps naturally to a Logseq block:
+
+    [ ] Follow up with John Doe
+        › Confirm the updated information
+
+Potential features:
+
+- Convert Logseq blocks to AxNotes entries
+- Map task states between systems
+- Display AxNotes UUIDs without putting them in visible Markdown
+- Create today, week, and month views
+- Keep AxNotes sidecars synchronized with block edits
+
+The main challenge is that Logseq has its own block identity and data model. AxNotes would need to decide whether Logseq block IDs or AxNotes UUIDs are authoritative.
+
+Fit: Excellent conceptually
+New technology required: JavaScript or TypeScript
+Risk: Two independent identity systems
+
+4. Neovim Plugin or Remote Integration
+--------------------------------------
+Neovim supports Lua, Vimscript, MessagePack-RPC, and Python clients.
+
+An integration could provide:
+
+    :AxNotesToday
+    :AxNotesWeek
+    :AxNotesSearch
+    :AxNotesComplete
+    :AxNotesSync
+
+It could also provide:
+
+- Marker highlighting
+- Task-state keybindings
+- Folding by date
+- Completion for slash commands
+- Navigation between dated notes
+- Calls into the AxNotes Python package
+
+Fit: Technically strong
+New technology required: Lua, or Python through RPC
+Audience: More developer-focused than general-user focused
+
+5. Sublime Text Plugin
+----------------------
+Sublime Text plugins are Python scripts and can add commands, keybindings, buffer changes, completions, regions, status messages, and quick panels.
+
+An AxNotes plugin could add:
+
+- Open-today command
+- Marker completion
+- Task-state commands and keybindings
+- Entry highlighting
+- Metadata synchronization when a note is saved
+- Search results in a quick panel
+- Status-bar feedback
+
+Sublime Text runs plugins in an embedded Python environment. A safer integration would invoke the AxNotes executable as a subprocess or communicate through a stable CLI/API rather than assume the AxNotes package can be imported directly.
+
+Fit: Good
+New technology required: Mostly Python
+Risk: Embedded Python dependency compatibility
+
+Lower-Priority Candidates
+-------------------------
+
+Zed
+~~~
+Zed supports extensions for languages, debuggers, themes, icons, snippets, and MCP servers. Its current extension model appears less suited to a complete Markdown notebook workflow than Visual Studio Code or Obsidian. MCP-based search and command exposure could be useful later.
+
+JupyterLab
+~~~~~~~~~~
+A JupyterLab extension could show AxNotes in a side panel or custom editor, but it would require TypeScript, Jupyter extension packaging, browser-side state, and synchronization with the Python notebook service. This is a specialized integration rather than a shortcut for the primary interface.
+
+GNU Emacs
+~~~~~~~~~
+An Emacs package could integrate well with Markdown and org-mode concepts, but would require Emacs Lisp and reconciliation with another task and identity model.
+
+Recommended Priority
+--------------------
+
+1. Visual Studio Code
+   Best fit with the current development workflow and broadest editor API.
+
+2. Obsidian
+   Best fit for Markdown note-taking users.
+
+3. Logseq
+   Best fit for block-oriented interaction.
+
+4. Sublime Text
+   Python plugin model and relatively simple editor integration.
+
+5. Neovim
+   Strong APIs and Python/Lua integration, but a more technical audience.
+
+6. Zed
+   Promising later, but currently a narrower fit for this workflow.
+
+Architectural Recommendation
+----------------------------
+Do not turn AxNotes into a plugin-only product. Keep the portable core independent:
+
+    AxNotes Core
+        Markdown
+        Metadata
+        Fingerprints
+        Reconciliation
+        Search
+        Commands
+            ↑
+            │ Stable CLI or Python API
+            │
+    Plugin Adapters
+        Visual Studio Code
+        Obsidian
+        Logseq
+        Neovim
+        Sublime Text
+
+This allows the same notebook to be used through the AxNotes CLI, a text editor, or a future plugin without changing the authoritative format.
+
+Best Next Experiment
+--------------------
+The smallest useful integration would be a Visual Studio Code extension with four commands:
+
+- AxNotes: Open Today
+- AxNotes: Add Entry
+- AxNotes: Search
+- AxNotes: Sync Metadata
+
+This would validate the plugin-adapter architecture without attempting to reproduce the complete AxNotes interface.
