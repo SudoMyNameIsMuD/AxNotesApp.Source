@@ -4,6 +4,9 @@
 
 - Standardized v0.2 terminology for entries, quick-entry notation, Markdown markers, rendered markers, supporting details, metadata sidecars, and the derived index.
 - Clarified the README's current quick-entry notation and completed P0 architecture status.
+- Added explicit `AxNotes migrate single-file` migration with retained source and metadata/configuration backups, durable identity preservation, rollback, and a rebuildable single-file index.
+- Added atomic Markdown writing and date-aware loading, appending, and rendering for migrated single-file notebooks.
+- Synchronize metadata and the derived index after supporting-detail capture.
 
 ## 0.1.6 Full Working Build
 - Restored the interactive writing CLI on top of the new `notes/` storage architecture.

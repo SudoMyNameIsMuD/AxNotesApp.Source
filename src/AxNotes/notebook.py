@@ -15,6 +15,7 @@ from .metadata import (
 from .models import TASK_MARKERS, Entry, EntryType, TaskState
 from .parser import parse_file
 from .reconcile import reconcile
+from .single_file import append_to_notebook, parse_notebook
 
 STORAGE_PREFIXES = {
     EntryType.NOTE: "-",
@@ -48,6 +49,18 @@ class Notebook:
     @property
     def index_path(self):
         return self.state_dir / "index.sqlite3"
+
+    @property
+    def single_file_path(self):
+        return self.root / "notebook.md"
+
+    @property
+    def single_file_metadata_path(self):
+        return self.metadata_dir / "notebook.json"
+
+    @property
+    def uses_single_file(self):
+        return self.config.format == "single-file"
 
     def metadata_path_for_source(self, source: str | Path) -> Path:
         relative = Path(str(source).replace("\\", "/"))
@@ -115,12 +128,73 @@ class Notebook:
         return result
 
     def sync_metadata(self):
+        if self.uses_single_file:
+            self.reconcile_single_file()
+            from . import index
+            index.sync(self)
+            return
+
         for note_path in sorted(self.notes_dir.glob("*.md")):
             self.reconcile_note_file(note_path)
 
         from . import index
+
         index.sync(self)
 
+    def reconcile_single_file(self):
+        records = parse_notebook(
+            self.single_file_path.read_text(encoding="utf-8"),
+            self.config.heading_format,
+        )
+        prior = (
+            load_metadata(self.single_file_metadata_path)
+            if self.single_file_metadata_path.exists()
+            else MetadataFile(schema_version=1, entries=())
+        )
+        previous = [{"id": item.id, "fingerprints": item.fingerprints} for item in prior.entries]
+        current = []
+        for record in records:
+            if record.day is None:
+                raise ValueError(
+                    f"Entry on line {record.line_number} is not under a valid day heading."
+                )
+            current.append(
+                {
+                    "id": None,
+                    "entry_type": record.entry.entry_type,
+                    "text": record.entry.text,
+                    "task_state": record.entry.task_state,
+                    "details": record.entry.details,
+                    "fingerprints": fingerprint_entry(record.entry),
+                }
+            )
+        result = reconcile(previous, current)
+
+        resolved_entries = []
+        for match in result.matches:
+            record = records[match.new_index]
+            fingerprint = fingerprint_entry(record.entry)
+            identity = match.new_identity
+            entry_id = identity if isinstance(identity, UUID) else UUID(str(identity))
+            resolved_entries.append(
+                MetadataEntry(
+                    id=entry_id,
+                    source="notebook.md",
+                    source_date=record.day,
+                    ordinal=record.ordinal,
+                    fingerprints={
+                        "full": fingerprint.full,
+                        "content": fingerprint.content,
+                        "parent": fingerprint.parent,
+                        "text": fingerprint.text,
+                    },
+                )
+            )
+        write_metadata(
+            self.single_file_metadata_path,
+            MetadataFile(schema_version=1, entries=tuple(resolved_entries)),
+        )
+        return result
 
     def initialize(self):
         self.root.mkdir(parents=True, exist_ok=True)
@@ -141,6 +215,12 @@ class Notebook:
         return f"# {day.strftime(self.config.heading_format).upper()}"
 
     def ensure_note(self, day: date):
+        if self.uses_single_file:
+            if not self.single_file_path.exists():
+                from .single_file import atomic_write_text
+
+                atomic_write_text(self.single_file_path, "# AxNotes Notebook\n")
+            return self.single_file_path
         path = self.note_path(day)
         if not path.exists():
             path.write_text(
@@ -157,6 +237,14 @@ class Notebook:
         day = day or date.today()
         prefix = TASK_MARKERS[task_state] if entry_type is EntryType.TASK else STORAGE_PREFIXES[entry_type]
         path = self.ensure_note(day)
+        if self.uses_single_file:
+            append_to_notebook(
+                path,
+                day,
+                f"{prefix} {clean}",
+                self.config.heading_format,
+            )
+            return path
         with path.open("a", encoding="utf-8", newline="\n") as stream:
             stream.write(f"{prefix} {clean}\n")
         return path
@@ -165,12 +253,23 @@ class Notebook:
         clean = " ".join(text.strip().splitlines()).strip()
         if not clean:
             raise ValueError("Detail text cannot be empty.")
-        path = self.ensure_note(day or date.today())
+        day = day or date.today()
+        path = self.ensure_note(day)
+        if self.uses_single_file:
+            append_to_notebook(path, day, f"  › {clean}", self.config.heading_format)
+            return path
         with path.open("a", encoding="utf-8", newline="\n") as stream:
             stream.write(f"  › {clean}\n")
         return path
 
     def entries_for_day(self, day: date) -> list[Entry]:
+        if self.uses_single_file:
+            text = self.single_file_path.read_text(encoding="utf-8")
+            return [
+                record.entry
+                for record in parse_notebook(text, self.config.heading_format)
+                if record.day == day
+            ]
         path = self.note_path(day)
         return parse_file(path) if path.exists() else []
 

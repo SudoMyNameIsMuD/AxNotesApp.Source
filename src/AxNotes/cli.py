@@ -1,10 +1,13 @@
 import argparse
+import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import __version__
-from .index import rebuild, search, sync
+from .index import rebuild, search
 from .interaction import COMMANDS, normalize_detail, normalize_entry
+from .metadata import MetadataError
+from .migration import MigrationError, migrate_single_file
 from .models import Entry, EntryType, TaskState
 from .notebook import Notebook
 from .renderer import render_entry
@@ -33,9 +36,12 @@ def query_context(notebook, query):
     value = query.strip()
     lowered = value.casefold()
     today = date.today()
-    names = {name.lower(): index for index, name in enumerate(
-        ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-    )}
+    names = {
+        name.lower(): index
+        for index, name in enumerate(
+            ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+        )
+    }
     if lowered in names:
         target = today - timedelta(days=(today.weekday() - names[lowered]) % 7)
         return target.strftime(notebook.config.date_format)
@@ -54,13 +60,21 @@ def print_search(notebook, query, output_fn=print):
         return
     current = None
     for row in rows:
-        if row["source_file"] != current:
-            current = row["source_file"]
-            stem = Path(current).stem
+        group = (row["source_file"], row["source_date"])
+        if group != current:
+            current = group
+            source_file, source_date = group
             try:
-                output_fn("\n" + notebook.heading(datetime.strptime(stem, notebook.config.date_format).date()))
+                day = (
+                    datetime.fromisoformat(source_date).date()
+                    if source_date
+                    else datetime.strptime(
+                        Path(source_file).stem, notebook.config.date_format
+                    ).date()
+                )
+                output_fn("\n" + notebook.heading(day))
             except ValueError:
-                output_fn("\n# " + current)
+                output_fn("\n# " + source_file)
         entry = Entry(
             EntryType(row["type"]),
             row["text"],
@@ -74,6 +88,7 @@ def capture_inline_entry(notebook, raw, day=None):
     supporting_detail = normalize_detail(value)
     if supporting_detail is not None:
         notebook.append_detail(supporting_detail, day=day)
+        notebook.sync_metadata()
         return f"     › {supporting_detail}"
 
     entry_type, text, state = normalize_entry(value)
@@ -96,7 +111,7 @@ def handle_command(notebook, raw, output_fn=print, input_fn=input):
     elif command == "/reindex":
         output_fn(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif command == "/sync":
-        sync(notebook)
+        notebook.sync_metadata()
         output_fn("Derived index synchronized.")
     elif command in {"/help", "/"}:
         output_fn("\n" + MENU + "\n")
@@ -111,7 +126,9 @@ def interactive(notebook, input_fn=input, output_fn=print):
     try:
         notebook.validate()
     except FileNotFoundError:
-        output_fn("AxNotes\n\nThis folder is not an AxNotes notebook.\n\nRun:\n  AxNotes init\n\nThen start AxNotes again.")
+        output_fn(
+            "AxNotes\n\nThis folder is not an AxNotes notebook.\n\nRun:\n  AxNotes init\n\nThen start AxNotes again."
+        )
         return 2
     output_fn(f"AxNotes\n\n{notebook.heading(date.today())}\n")
     while True:
@@ -145,6 +162,9 @@ def parser():
     query.add_argument("query")
     sub.add_parser("reindex")
     sub.add_parser("sync")
+    migrate = sub.add_parser("migrate")
+    migration_sub = migrate.add_subparsers(dest="migration", required=True)
+    migration_sub.add_parser("single-file")
     return command_parser
 
 
@@ -156,6 +176,17 @@ def main(argv=None):
         print(f"AxNotes notebook initialized: {notebook.root}")
         return 0
     notebook = Notebook(find_root(Path.cwd()))
+    if args.command == "migrate" and args.migration == "single-file":
+        try:
+            count, notes_backup, metadata_backup = migrate_single_file(notebook)
+        except (MigrationError, MetadataError, OSError, sqlite3.Error, ValueError) as error:
+            print(f"AxNotes migration failed: {error}")
+            return 2
+        entry_label = "entry" if count == 1 else "entries"
+        print(f"AxNotes migrated {count} {entry_label} to notebook.md.")
+        print(f"Original notes retained at: {notes_backup}")
+        print(f"Metadata and configuration backup: {metadata_backup}")
+        return 0
     if args.command is None:
         return interactive(notebook)
     try:
@@ -172,7 +203,7 @@ def main(argv=None):
     elif args.command == "reindex":
         print(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif args.command == "sync":
-        sync(notebook)
+        notebook.sync_metadata()
         print("Derived index synchronized.")
     return 0
 

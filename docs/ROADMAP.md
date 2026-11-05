@@ -1,6 +1,6 @@
 ## AxNotes Roadmap
 
-**Updated:** 04 Nov 2026  
+**Updated:** 05 Nov 2026
 **Canonical repository:** `SudoMyNameIsMuD/AxNotesApp.Source`
 
 **Core UX principle:** AxNotes should become easier to use as its implementation becomes more capable. Ordinary users should not need to understand Python, SQLite, UUIDs, metadata sidecars, or internal file-management behavior.
@@ -8,26 +8,26 @@
 ### Current Baseline
 
 - P0 Steps 1 through 8 are complete.
-- Working interactive CLI uses the `notes/` notebook layout.
-- Authoritative Markdown contains no visible UUID comments.
-- Durable entry identities are stored in validated metadata sidecars under `.AxNotes/metadata/`.
-- The derived index is disposable and rebuildable from authoritative Markdown and metadata sidecars.
+- The current v0.1.8 CLI uses the `notes/` daily-file layout; migrated and newly initialized v0.2 notebooks will use one authoritative `notebook.md` file.
+- Clean Markdown contains no visible UUID comments.
+- Durable entry identities are stored in validated JSON sidecars under `.AxNotes/metadata/`.
+- SQLite is derived, disposable, and rebuildable from Markdown plus metadata.
 - Renderer uses the `entry.entry_type` model contract.
 - P0 is validated on Windows with OneDrive; macOS and Linux validation remain pending.
 
 ### Locked Format and Architecture Decisions
 
-- `notes/` contains authoritative Markdown.
+- Current v0.1 notebooks use `notes/` as authoritative Markdown; migrated and newly initialized v0.2 notebooks will use one authoritative `notebook.md` file.
 - `AxNotes.toml` identifies an AxNotes notebook.
-- `AxNotes init` creates `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`.
-- `.AxNotes/index.sqlite3` is the derived index, created lazily, and may be rebuilt.
-- Authoritative Markdown owns entry text, entry type, task state, supporting details, and order.
-- Metadata sidecars under `.AxNotes/metadata/` own durable identity and relationships.
+- Current v0.1 `AxNotes init` creates `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`; v0.2 initialization will create `notebook.md`, `.AxNotes/metadata/`, and `AxNotes.toml` after the single-file format is complete.
+- `.AxNotes/index.sqlite3` is derived, created lazily, and may be rebuilt.
+- Markdown owns entry text, type, task state, supporting details, and order.
+- `.AxNotes/metadata/` owns durable identity and relationships.
 - Supporting details do not receive independent UUIDs in metadata schema v1.
-- AxNotes supports one level of supporting detail in v0.1.
-- Rendered marker alignment is presentation-only; Markdown is not padded for terminal output.
+- AxNotes supports one supporting-detail level in v0.1.
+- Display alignment is presentation-only; Markdown is not padded for terminal output.
 - Metadata failure must never damage or rewrite Markdown.
-- Metadata sidecars are committed before the derived index is refreshed.
+- Metadata is committed before SQLite is refreshed.
 - Normal packages remain complete runnable applications unless explicitly labeled as prototypes.
 
 ### P0: Storage and Durable Identity Foundation — Complete
@@ -73,15 +73,129 @@
 - Cross-platform validation on macOS and Linux remains pending.
 - The durable identity foundation is ready for the v0.2 interface milestone.
 
-### v0.2: Interface Improvement Roadmap
+### v0.2: Single-File Notebook and Interface Roadmap
 
-AxNotes v0.2 will improve the writing-first CLI while preserving the durable identity, metadata, reconciliation, and indexing foundation completed during P0.
+AxNotes v0.2 will migrate from one Markdown file per day to one authoritative `notebook.md` file organized by year, month, day, and section headings. The migration must preserve durable entry identities, clean Markdown, atomic persistence, metadata sidecars, the rebuildable SQLite index, and compatibility with existing v0.1 notebooks.
 
-Each interface step includes implementation, regression tests, help updates, and documentation updates.
+This is a foundational storage change. Implement and validate the single-file model before building section-aware views, `/lastweek`, or `/month`.
 
-#### AxNotes Key
 
-The AxNotes Key shows the rendered marker for each entry type or task state.
+#### Confirmed v0.2 Design Decisions
+
+1. **Authoritative storage:** v0.1 notebooks continue using dated files; v0.2 uses one authoritative `notebook.md` only after explicit migration.
+2. **Metadata layout:** migrated v0.2 notebooks use one `.AxNotes/metadata/notebook.json` sidecar.
+3. **`/md` behavior:** `/md` opens `notebook.md`; `/today` remains the current-day CLI view.
+4. **Manual headings:** all Markdown heading levels are accepted with validation and hierarchy repair.
+5. **Event notation:** both leading `@Owners Meeting` and trailing `Owners Meeting @` create an event section.
+6. **Divider semantics:** a divider is an unnamed structural boundary and ends supporting-detail attachment eligibility.
+7. **Release scope:** v0.2 includes both the single-file migration and the planned interface improvements.
+
+#### Target Notebook Layout
+
+```text
+AxNotes-Notebook/
+├── notebook.md
+├── AxNotes.toml
+└── .AxNotes/
+    ├── metadata/
+    │   └── notebook.json
+    └── index.sqlite3
+```
+
+#### Canonical Heading Hierarchy
+
+| Level | Purpose | Example |
+|---|---|---|
+| `#` | Notebook title | `# AxNotes Notebook` |
+| `##` | Year | `## 2026` |
+| `###` | Month | `### November` |
+| `####` | Day | `#### Thursday \| 05NOV26` |
+| `#####` | Named section | `##### Follow-Up` |
+| `##### @` | Event section | `##### @ Owners Meeting` |
+
+Example:
+
+```markdown
+# AxNotes Notebook
+
+## 2026
+
+### November
+
+#### Thursday | 05NOV26
+
+##### General Notes
+
+- Follow up with John Doe
+[ ] Prepare the weekly report
+
+___
+
+##### @ Owners Meeting
+
+  › 05-Nov-2026 2:00 PM
+
+- Notes taken during the Owners Meeting
+[ ] Send the meeting notes
+  › Confirm the due date
+```
+
+#### Storage and Architecture Rules
+
+- `notebook.md` becomes authoritative for entry text, entry type, task state, supporting details, section context, and order.
+- `.AxNotes/metadata/notebook.json` owns durable entry identity and fingerprints.
+- `.AxNotes/index.sqlite3` remains derived, disposable, and rebuildable.
+- Year, month, day, and section headings are structural Markdown in schema v1 and do not receive durable UUIDs.
+- Supporting details remain attached to their parent and do not receive independent UUIDs in schema v1.
+- Display alignment remains presentation-only.
+- All Markdown and metadata replacements must be atomic.
+- A failed migration or write must leave the prior valid notebook intact.
+- Existing `notes/YYYY-MM-DD.md` notebooks remain supported until explicitly migrated.
+
+#### Single-File Trade-Offs and Safeguards
+
+- A OneDrive conflict can affect the full notebook, so atomic writes and backups are mandatory.
+- Appending to the current day should avoid rewriting unrelated content when practical, but the final replacement must remain atomic.
+- Editing an older date requires safe insertion into the middle of `notebook.md`.
+- Validate performance with representative notebooks containing approximately 10,000, 50,000, and 100,000 entries.
+- Parsing should remain linear, and search should use the derived index rather than reparsing for every query.
+
+#### Migration Command
+
+Add an explicit command:
+
+```text
+axnotes migrate single-file
+```
+
+Migration must:
+
+1. Back up `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`.
+2. Read dated Markdown files in chronological order.
+3. Build `notebook.md` in a temporary location.
+4. Preserve existing entry UUIDs.
+5. Generate and validate `.AxNotes/metadata/notebook.json`.
+6. Rebuild SQLite from the generated Markdown and metadata.
+7. Compare source and destination entry counts and UUIDs.
+8. Atomically install the new notebook and metadata.
+9. Keep the old notes directory as `notes.pre-single-file-backup/`.
+10. Never silently delete the backup.
+
+Do not silently migrate existing notebooks during startup or `AxNotes init`.
+
+#### Migration Validation
+
+- Every source entry appears exactly once in `notebook.md`.
+- Existing UUIDs remain unchanged.
+- Supporting details remain attached to their parents.
+- Dates are placed under the correct year and month headings.
+- Existing Markdown remains available in the retained backup.
+- Rebuilding SQLite preserves search results and durable identities.
+- Failed validation prevents installation of the generated files.
+
+### AxNotes Key
+
+The AxNotes Key shows how each entry type appears in the CLI after rendering.
 
 ```text
  -  Normal note
@@ -96,11 +210,9 @@ The AxNotes Key shows the rendered marker for each entry type or task state.
      › Supporting detail
 ```
 
-#### Quick-Entry Notation
+### Quick-Entry Notation
 
-Quick-entry notation is the abbreviated syntax accepted while capturing an entry. AxNotes normalizes that input into an entry type, task state when applicable, entry text, and canonical Markdown marker.
-
-| Entry type | Quick-entry notation | Shortest shortcut | Markdown marker | Rendered marker | Example quick entry |
+| Entry type | Accepted quick-entry notation | Shortest shortcut | Markdown marker | Rendered marker | Example quick entry |
 |---|---|---|---|---|---|
 | Normal note | Plain text | Plain text | `-` | ` - ` | `Follow up with John Doe` |
 | Open task | Leading `[` or `[ ]` | `[` | `[ ]` | `[ ]` | `[Follow up with John Doe` |
@@ -110,175 +222,181 @@ Quick-entry notation is the abbreviated syntax accepted while capturing an entry
 | Canceled task | Leading or trailing `[-` or `[-]` | `[-` | `[-]` | `[-]` | `Follow up with John Doe [-` |
 | Question | Leading or trailing `?` | `?` | `?` | ` ? ` | `Does John Doe have the update?` |
 | Important entry | Leading or trailing `!` | `!` | `!` | ` ! ` | `John Doe needs the final report !` |
-| Event | Leading or trailing `@` | `@` | `@` | ` @ ` | `Meeting with John Doe @` |
+| Event | Leading or trailing `@` | `@` | Event-section heading | ` @ ` | `Meeting with John Doe @` |
 | Supporting detail | Leading or trailing `>` | `>` | `  ›` | `     ›` | `Confirm the due date >` |
 
-##### Important distinctions
+Important distinctions:
 
 - `>` identifies a supporting detail.
 - `[>` or `[>]` identifies a migrated task.
 - `[` is the shortest shortcut for an open task.
-- The closing `]` may be omitted when using task-state shorthand.
-- AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker. AxNotes places the canonical Markdown marker at the beginning of the stored entry. Trailing quick-entry notation is removed from the entry text during normalization.
+- AxNotes converts quick-entry notation into the corresponding entry type, task state, entry text, and canonical Markdown marker.
+- Trailing shortcuts are removed from entry text during normalization.
 - The CLI applies presentation spacing to produce the rendered marker.
-- Display alignment is not written into Markdown solely for appearance.
+- Display alignment is never written into Markdown solely for appearance.
 
-##### Normalization example
-
-```text
-Captured input:
-Follow up with John Doe [x
-
-Normalized entry:
-Entry type: Task
-Task state: Completed
-Entry text: Follow up with John Doe
-
-Authoritative Markdown:
-[x] Follow up with John Doe
-
-Rendered marker and entry text:
-[x] Follow up with John Doe
-```
-
-Supporting detail example:
-
-```text
-Captured input:
-Confirm the due date >
-
-Normalized entry:
-Entry type: Supporting detail
-Entry text: Confirm the due date
-
-Authoritative Markdown:
-  › Confirm the due date
-
-Rendered marker and entry text:
-     › Confirm the due date
-```
-
-#### Terminology Glossary
+### Terminology Glossary
 
 | Term | Definition |
 |---|---|
-| **Entry** | One AxNotes content item. Top-level entries include a normal note, task, question, important entry, event, or decision; a top-level entry may have supporting details. |
-| **Entry type** | The semantic category assigned to a top-level entry, such as a normal note, task, question, important entry, event, or decision. A supporting detail is attached to a top-level entry rather than stored as a separate `EntryType`. |
-| **Task state** | The condition of a task: open, in progress, completed, migrated, or canceled. |
-| **Entry text** | The user-written content after normalization has interpreted the quick-entry notation. Leading notation determines the Markdown marker; trailing quick-entry notation is excluded from entry text during normalization. |
-| **Quick-entry notation** | Any abbreviated syntax AxNotes accepts while the user captures an entry. |
-| **Shortcut** | The shortest accepted quick-entry notation for an entry type or task state. |
-| **Normalization** | The process that converts quick-entry notation into the canonical entry type, task state, entry text, and Markdown marker. |
+| **Entry** | One AxNotes content item, such as a normal note, task, question, important entry, event, or supporting detail. |
+| **Entry type** | The semantic category assigned to an entry. |
+| **Task state** | Open, in progress, completed, migrated, or canceled. |
+| **Entry text** | User-written content after quick-entry notation is interpreted. |
+| **Quick-entry notation** | Abbreviated syntax accepted while capturing an entry. |
+| **Shortcut** | The shortest accepted quick-entry notation. |
+| **Normalization** | Conversion into canonical entry type, task state, entry text, and Markdown marker. |
 | **Markdown marker** | The canonical marker written to authoritative Markdown. |
-| **Rendered marker** | The Markdown marker plus presentation spacing displayed in the CLI. |
-| **Supporting detail** | A subordinate line attached to the preceding top-level entry. Supporting details use `›` in Markdown and rendered views. |
-| **Writing prompt** | The `- ` prompt where the user captures an entry or enters a slash command. |
-| **Inline command output** | Command results displayed inside the active AxNotes session before returning to the writing prompt. |
-| **Authoritative Markdown** | The files under `notes/` that store entry text, entry type, task state, supporting details, and order. |
-| **Metadata sidecar** | A JSON sidecar under `.AxNotes/metadata/` that stores durable identity and fingerprints without adding visible UUIDs to authoritative Markdown. |
-| **Durable identity** | The UUID that allows AxNotes to recognize the same logical entry after supported changes. |
-| **Derived index** | The rebuildable SQLite index used for fast search. The index is recreated from authoritative Markdown and metadata sidecars when needed. |
+| **Rendered marker** | The marker and presentation spacing displayed in the CLI. |
+| **Section** | A named structural region beneath a day heading. |
+| **Event section** | A section created by a newly captured event and paired with a generated timestamp. |
+| **Divider** | A structural horizontal rule stored as `___`; it separates content but does not create a named section. |
+| **Supporting detail** | A subordinate line attached to the preceding eligible entry in the current section. |
+| **Authoritative Markdown** | `notebook.md` after migration; dated files under `notes/` before migration. |
+| **Metadata sidecar** | JSON that stores durable identity and fingerprints without visible UUIDs in Markdown. |
+| **Durable identity** | The UUID used to recognize the same logical entry after supported changes. |
+| **Derived index** | Rebuildable SQLite used for fast search. |
+| **Writing prompt** | The `- ` prompt used for entries and slash commands. |
+| **Inline command output** | Command results displayed before AxNotes returns to the writing prompt. |
 
-#### Terminology Structure
+### Interface and Section Implementation Sequence
 
-Use this hierarchy consistently in the roadmap, README, `/help`, code comments, and tests:
+#### Step 1: Single-File Notebook Foundation
 
-```text
-Entry
-├── Entry type
-├── Task state, when applicable
-├── Entry text
-└── Supporting details
+- Complete: add `notebook.md` discovery, creation, date-aware loading, and atomic writing.
+- Complete: add `notebook.json` metadata loading and atomic persistence.
+- Complete: update indexing to derive rows from `notebook.md` plus `notebook.json`; rebuilds install atomically.
+- Complete: keep v0.1 daily-file notebooks readable until explicit migration.
+- Complete: add `axnotes migrate single-file`, source/configuration backups, UUID/count validation, rollback, and migration regression tests.
 
-Input terminology
-├── Quick-entry notation
-└── Shortcut
-
-Output terminology
-├── Markdown marker
-└── Rendered marker
-```
-
-#### 1. Prompt Continuity and Inline Command Output — Complete
-
-The current CLI uses Python's plain `input()` function. The terminal already echoes captured input, so AxNotes must not print a second copy after saving the entry.
-
-Required capture flow:
-
-```text
-Capture input
-    ↓
-Normalize and validate
-    ↓
-Write authoritative Markdown
-    ↓
-Synchronize metadata
-    ↓
-Refresh the derived index
-    ↓
-Return to the writing prompt
-```
-
-Requirements:
+#### Step 2: Prompt Continuity and Inline Command Output
 
 - Do not print a normalized second copy after successful capture.
 - Continue displaying concise validation messages.
-- Continue rendering command results inside the active session.
+- Render command results inside the active session.
 - Return to the writing prompt after entries and commands.
-- Keep UUIDs, metadata paths, SQLite details, and internal state out of normal user output.
-- Do not expose Python tracebacks during ordinary use.
+- Keep UUIDs, metadata paths, SQLite details, and internal state out of normal output.
+- Defer true in-place marker replacement to a future rich terminal editor.
 
-Commands that continue to produce inline command output include:
+#### Step 3: Complete Quick-Entry Notation
 
-```text
-/today
-/week
-/search
-/help
-/reindex
-/sync
-```
-
-True in-place replacement of raw quick-entry notation with a rendered marker is deferred until the future rich terminal-editing milestone.
-
-#### 2. Complete Quick-Entry Notation
-
-Implement and test all quick-entry notation shown in the table above.
-
-Requirements:
-
-- Support all five task states.
-- Support leading and trailing task-state notation.
-- Support questions, important entries, events, and supporting details.
-- Convert quick-entry notation into the canonical Markdown marker.
+- Implement all notation in the table above.
+- Convert notation into canonical Markdown structure.
 - Remove trailing shortcuts from entry text.
-- Preserve ordinary punctuation and meaningful text.
-- Reject empty markers without creating empty entries.
-- Preserve the existing Markdown storage format.
+- Preserve meaningful punctuation and internal marker characters.
+- Reject empty markers without creating entries.
 
-#### 3. `/markdown` and `/md`
+#### Step 4: Headings and Dividers
 
-Add two equivalent commands:
+Accept structural headings:
 
 ```text
-/markdown
-/md
+# Notebook-level heading
+## Year-level heading
+### Month-level heading
+#### Day-level heading
+##### Section heading
 ```
 
-Requirements:
+AxNotes accepts manual headings at all Markdown levels with validation and hierarchy repair.
 
-- Open today's Markdown file in the operating system's default Markdown application.
-- Create today's Markdown file first if it does not exist.
-- Keep AxNotes running after the file opens.
-- Return to the writing prompt.
+Manual-heading rules:
+
+- Preserve a valid manual heading exactly when it fits the current hierarchy.
+- Validate that heading text is nonempty.
+- Reject a heading that cannot be placed safely without ambiguity.
+- Repair missing structural parents only when the intended year, month, day, or section context can be determined unambiguously.
+- Never silently move existing entries or overwrite an existing structural heading.
+- Report the repair or rejection with a concise user-facing message.
+- Keep `/newsection` as the preferred way to create a level-five section heading.
+- Add regression tests for valid headings, skipped levels, duplicate structural headings, hierarchy repair, and rejected ambiguous input.
+
+Support divider input:
+
+```text
+___
+/divider
+```
+
+Rules:
+
+- Three or more underscores alone normalize to `___`.
+- Do not add a normal-note marker.
+- Do not create consecutive dividers.
+- A divider does not create a named section.
+- A divider is an unnamed structural boundary and ends supporting-detail attachment eligibility.
+- A supporting detail must not attach across a divider.
+- `_`, `__`, and underscores inside ordinary text remain normal text.
+
+#### Step 5: Named Sections
+
+Add:
+
+```text
+/newsection Follow-Up
+/new section Follow-Up
+```
+
+Rules:
+
+- Create `##### Follow-Up` beneath the current day.
+- Insert `___` before the section when appropriate.
+- Do not duplicate adjacent dividers.
+- Reject empty section titles.
+- Allow repeated section names.
+- Keep subsequent entries under the current section.
+
+#### Step 6: Event Sections and Timestamps
+
+Newly captured events create sections using either leading or trailing quick-entry notation:
+
+```text
+@Owners Meeting
+Owners Meeting @
+```
+
+Both forms normalize to the same event title and create the same event section.
+
+Stored beneath the current day as:
+
+```markdown
+___
+
+##### @ Owners Meeting
+
+  › 05-Nov-2026 2:00 PM
+```
+
+Rules:
+
+- Preserve `@` in the section heading.
+- Generate one timestamp supporting detail.
+- Round to the nearest 15 minutes; halfway values round forward.
+- Preserve date correctly across midnight.
+- Inject the clock for deterministic tests.
+- Prevent duplicate generated timestamps.
+- Historical `@` entries remain unchanged unless explicitly migrated later.
+
+#### Step 7: Current-Section and Supporting-Detail Rules
+
+- The latest section heading is the current section.
+- Notes and tasks remain beneath that section until another section begins.
+- A supporting detail attaches only to the preceding eligible entry in the current section.
+- Do not attach details across a divider, day, month, year, or section boundary.
+- An orphan detail returns: `A supporting detail needs a parent entry in the current section.`
+- The generated event timestamp is explicitly attached to the event heading by the event workflow.
+
+#### Step 8: `/markdown` and `/md`
+
+- `/md` and `/markdown` open `notebook.md` in the operating system's default Markdown application.
+- `/today` remains the current-day CLI view and does not open a separate dated file.
+- Keep AxNotes running and return to the writing prompt.
 - Support paths containing spaces.
-- Support Windows, macOS, and Linux without requiring Visual Studio Code.
-- Display a concise error instead of a traceback if the file cannot be opened.
-- Mock the operating-system opener during automated tests.
+- Mock operating-system launch behavior in tests.
 
-#### 4. Improved `/help`
+#### Step 9: Improved `/help`
 
-Organize help into clear sections:
+Organize help into:
 
 ```text
 Writing
@@ -287,105 +405,184 @@ Maintenance
 Planned
 ```
 
-Requirements:
+Include headings, `___`, `/divider`, `/newsection`, and event-section behavior only when implemented.
 
-- Use terminology from the glossary.
-- Show active quick-entry notation and shortcuts.
-- Explain Markdown markers separately from rendered markers when needed.
-- Keep maintenance commands separate from everyday commands.
-- Do not present planned commands as available.
-- Keep `/help`, the roadmap, and later README documentation consistent.
-
-#### 5. Wrapped Rendering
-
-Add terminal-width-aware wrapping to rendered output.
-
-Top-level example:
-
-```text
-[ ] Follow up with John Doe regarding the updated information and confirm
-    the expected completion date.
-```
-
-Supporting detail example:
-
-```text
-     › Include the supporting information requested during the meeting
-       and note any remaining open items.
-```
-
-Requirements:
+#### Step 10: Wrapped Rendering
 
 - Align top-level continuation lines beneath entry text.
-- Align supporting detail continuation lines beneath their text.
-- Apply the same rules to `/today`, `/week`, `/search`, and standalone rendering.
-- Preserve entry order and parent-detail relationships.
-- Keep display alignment out of authoritative Markdown.
-- Defer cursor-aware wrapped editing until the future rich terminal interface.
+- Align supporting-detail continuation lines beneath detail text.
+- Apply consistent wrapping to `/today`, `/week`, `/search`, and standalone views.
+- Keep display spacing out of authoritative Markdown.
 
-#### 6. `/lastweek`
+#### Step 11: Section-Aware Views and Search
 
-Add:
+- `/today` selects the current day subtree.
+- `/week` selects the current Monday-through-Sunday range.
+- Search returns matching entries with year, month, day, and nearest section context.
+- Do not return dividers as standalone results.
+- Section headings may be searchable by title.
+- Keep supporting details with matching parents.
 
-```text
-/lastweek
-```
-
-Requirements:
+#### Step 12: `/lastweek`
 
 - Display the previous Monday through Sunday.
-- Group entries chronologically by date.
-- Preserve entry order within each date.
-- Keep supporting details attached to their parent entries.
-- Reuse the shared renderer and time-view formatting.
-- Return to the writing prompt.
+- Preserve chronological date, section, entry, and detail order.
 
-#### 7. `/month`
+#### Step 13: `/month`
 
-Add:
+- Display the current month subtree.
+- Preserve date, section, entry, and parent-detail order.
+- Begin with a reliable view rather than an automated summary.
+
+#### Step 14: Welcome Note and `/clearwelcome`
+
+- Create examples only in a genuinely empty notebook.
+- Use neutral examples such as John Doe.
+- Mark generated content with `axnotes_welcome: true` in configuration or metadata appropriate to the single-file model.
+- Never overwrite existing content.
+- `/clearwelcome` removes only unchanged generated content and associated derived state.
+- Refuse automatic deletion if the user modified the examples or added personal content.
+
+### Parser and Model Requirements
+
+Recognition order should account for:
 
 ```text
-/month
+1. Frontmatter or notebook metadata markers, if used
+2. Code fences
+3. Notebook title
+4. Year heading
+5. Month heading
+6. Day heading
+7. Section or event-section heading
+8. Divider
+9. Supporting detail
+10. Task
+11. Question or important entry
+12. Normal note
 ```
 
 Requirements:
 
-- Display the current calendar month.
-- Group entries chronologically by date.
-- Preserve entry order and parent-detail relationships.
-- Reuse the shared renderer.
-- Begin with a reliable monthly view rather than an automated summary.
-- Return to the writing prompt.
+- Preserve heading level and structural context.
+- Accept all Markdown heading levels with validation and hierarchy repair.
+- Do not silently repair ambiguous hierarchy.
+- Ignore heading-like content inside fenced code.
+- Never parse headings or dividers as normal notes.
+- Maintain entry and supporting-detail order.
+- Keep legacy v0.1 daily notes parseable during migration.
+- Keep normalized entries independent from CLI alignment.
 
-#### 8. Welcome Note and `/clearwelcome`
+### Metadata, Reconciliation, and Indexing
 
-When `AxNotes init` creates a genuinely empty notebook, create a welcome note demonstrating all active entry types, task states, quick-entry notation, and key commands.
+- Move migrated metadata to `.AxNotes/metadata/notebook.json`.
+- Each entry retains `source_date` and section context.
+- Preserve existing UUIDs during migration.
+- Reconciliation matches logical entries across headings inserted around them.
+- Headings and dividers do not receive UUIDs in schema v1.
+- Index rows include entry UUID, date, and section context as derived fields.
+- Rebuilding SQLite from `notebook.md` and `notebook.json` preserves search and identity.
+- Metadata synchronization must not rewrite user headings.
 
-Requirements:
+### Backward Compatibility
 
-- Use neutral examples such as John Doe.
-- Mark the generated note with `axnotes_welcome: true` in frontmatter.
-- Never overwrite an existing note.
-- Never add welcome content to an established notebook.
-- Add `/clearwelcome` to remove an unchanged generated welcome note.
-- Remove the associated metadata sidecar and refresh the derived index.
-- Keep AxNotes running after removal.
-- Refuse automatic deletion if generated content was modified or user content was added.
-- Direct the user to `/md` for manual editing when automatic removal is refused.
+- Do not require immediate migration.
+- Do not silently convert old notebooks.
+- Continue opening existing daily-file notebooks until the explicit migration succeeds.
+- Preserve old events, supporting details, metadata sidecars, and indexes.
+- Do not convert historical event entries into event sections automatically.
+- Keep the pre-migration backup until the user explicitly removes it.
 
-#### v0.2 Completion Target
+### Required Testing
 
-AxNotes v0.2 is complete when:
+Create or update tests for:
 
-- All eight interface steps are implemented.
-- Quick-entry terminology is consistent across the roadmap, `/help`, tests, and documentation.
-- Inline command output and writing-prompt continuity work reliably.
-- Markdown markers and rendered markers remain clearly separated.
-- Authoritative Markdown remains clean and contains no visible UUID comments.
-- Ruff, pytest, and Git whitespace checks pass.
-- Regression tests cover each notation form, command, view, and safety rule.
-- Windows validation is complete.
-- macOS and Linux validation is completed where operating-system behavior differs.
+- Single-file creation and atomic replacement.
+- Migration success, rollback, counts, UUID preservation, and retained backup.
+- Year, month, day, section, and event heading parsing.
+- Manual headings at all levels, including validation, safe hierarchy repair, and ambiguous-input rejection.
+- Leading and trailing event notation producing equivalent event sections.
+- Divider notation, `/divider`, and prevention of supporting-detail attachment across dividers.
+- `/newsection` and `/new section`.
+- Event timestamp rounding and midnight rollover.
+- Current-section tracking and orphan-detail rejection.
+- Prompt continuity and no duplicate visual output.
+- All quick-entry notation.
+- `/today`, `/week`, `/lastweek`, `/month`, and search context.
+- Metadata validity and absence of visible UUID comments.
+- SQLite deletion and rebuild.
+- Existing v0.1 notebook compatibility.
+- Representative performance at 10,000, 50,000, and 100,000 entries.
+
+### Manual Smoke Test
+
+After migrating a disposable test notebook:
+
+```text
+# Project Notes
+Normal note before a section
+___
+/newsection Follow-Up
+Follow up with John Doe
+[Prepare the report
+>Confirm the due date
+@Owners Meeting
+Meeting discussion
+[Send meeting notes
+/today
+/search John Doe
+/quit
+```
+
+Verify `notebook.md` contains the expected year, month, day, section, entries, timestamp, and supporting-detail hierarchy. Also verify:
+
+- Every source entry occurs once.
+- No heading or divider receives a normal-note marker.
+- No duplicate divider or event timestamp exists.
+- Existing UUIDs remain stable.
+- Metadata JSON is valid.
+- No `.tmp` files remain.
+- Search includes section context.
+- The original daily-file backup remains intact.
+- No traceback appears.
+
+### Quality Gate
+
+```powershell
+python -m ruff check src tests
+python -m pytest
+git diff --check
+```
+
+Then review:
+
+```powershell
+git status --short
+git --no-pager diff --stat
+git --no-pager diff
+```
+
+Do not commit or push until migration, smoke testing, and the final diff are reviewed.
+
+### v0.2 Definition of Done
+
+- `notebook.md` is the authoritative format for migrated or newly initialized v0.2 notebooks.
+- v0.1 dated files remain usable before explicit migration.
+- Migrated metadata is stored in one `.AxNotes/metadata/notebook.json` sidecar.
+- `/md` opens `notebook.md`, while `/today` remains the current-day CLI view.
+- Manual headings at all levels are validated and repaired only when unambiguous.
+- Leading and trailing `@` both create event sections.
+- Dividers end supporting-detail attachment eligibility.
+- Explicit migration preserves all content and durable identities.
+- Failed migration or persistence leaves the previous notebook intact.
+- Year, month, day, section, and event hierarchy works.
+- Headings and dividers remain structural Markdown.
+- Event sections receive one rounded timestamp.
+- Supporting details remain within section boundaries.
+- `/today`, `/week`, `/lastweek`, `/month`, and search understand hierarchy.
+- Existing v0.1 notebooks remain usable before migration.
+- Metadata and SQLite remain valid, derived, and recoverable.
+- Ruff, pytest, whitespace, performance, and manual smoke tests pass.
 
 ### Future Identity-backed Entry Operations
 
@@ -407,7 +604,7 @@ Requirements:
 ### Rich Terminal Experience
 
 - Replace plain `input()` with a richer terminal editing layer.
-- Transform quick-entry notation in place rather than echoing raw and normalized lines.
+- Transform quick markers in place rather than echoing raw and normalized lines.
 - Add slash-command suggestions and completion.
 - Add input history and expected Left/Right/Home/End behavior.
 - Improve long-line editing and wrapping.
@@ -429,17 +626,27 @@ Requirements:
 
 #### Navigation
 
-- Open today's Markdown in the configured/default editor.
-- Open a search result in its source file.
-- Jump directly to another date.
+- Open `notebook.md` in the configured/default editor with `/md` or `/markdown`.
+- Use `/today` for the current-day CLI view.
+- Open a search result in `notebook.md` and, where the host editor supports it, navigate to the matching heading or line.
+- Jump directly to another date within the notebook hierarchy.
 
 #### Backup and restore
 
-Back up:
+Back up according to notebook format.
+
+For v0.1 daily-file notebooks:
 
 - `notes/`
 - `.AxNotes/metadata/`
 - `AxNotes.toml`
+
+For migrated or newly initialized v0.2 single-file notebooks:
+
+- `notebook.md`
+- `.AxNotes/metadata/notebook.json`
+- `AxNotes.toml`
+- `notes.pre-single-file-backup/` until migration acceptance
 
 The disposable SQLite index does not require backup.
 
@@ -514,11 +721,12 @@ Requirements:
 ### Versioning Recommendation
 
 - Release the completed P0 identity foundation under v0.1.8.
-- Use v0.2 for the interface improvement milestone defined above.
+- Use v0.2 for the explicit single-file notebook migration and the interface-improvement milestone defined above.
 - Reserve v1.0 for a stable notebook format, dependable cross-platform installation, and mature core UX.
 
 ### Immediate Next Actions
 
 1. Complete and publish the v0.1.8 P0 release.
-2. Begin v0.2 Step 2: complete quick-entry notation.
-3. Add tests and documentation with each interface step.
+2. Complete representative performance checks for 10,000, 50,000, and 100,000-entry single-file notebooks.
+3. Continue with v0.2 Step 3: complete quick-entry notation, then implement heading/divider and section behavior.
+4. Add tests and documentation with every storage and interface step.

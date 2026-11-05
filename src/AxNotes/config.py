@@ -18,6 +18,7 @@ heading_format = "%A | %d%b%y"
 @dataclass(frozen=True, slots=True)
 class Config:
     root: Path
+    format: str = "daily-files"
     notes_directory: str = "notes"
     metadata_directory: str = ".AxNotes/metadata"
     date_format: str = "%Y-%m-%d"
@@ -35,6 +36,7 @@ class Config:
         display = data.get("display", {})
         return cls(
             root=root,
+            format=str(notebook.get("format", "daily-files")),
             notes_directory=str(notebook.get("notes_directory", "notes")),
             metadata_directory=str(metadata.get("directory", ".AxNotes/metadata")),
             date_format=str(notebook.get("date_format", "%Y-%m-%d")),

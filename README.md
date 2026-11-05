@@ -118,3 +118,13 @@ P0 Steps 1 through 8 are complete:
 - Metadata sidecars under `.AxNotes/metadata/` store durable entry identities.
 - The derived index is disposable and rebuildable from Markdown and metadata sidecars.
 - Markdown remains clean and contains no visible UUID comments.
+
+## Single-file notebook migration
+
+Existing v0.1 notebooks continue using dated files under `notes/` until explicitly migrated. From the notebook folder, run:
+
+```text
+AxNotes migrate single-file
+```
+
+Migration creates `notebook.md` and `.AxNotes/metadata/notebook.json`, rebuilds the derived index, and preserves the original notes at `notes.pre-single-file-backup/`. It also keeps a copy of the metadata sidecars and configuration under `.AxNotes/backups/`. Migration refuses to overwrite an existing backup or single-file notebook.
