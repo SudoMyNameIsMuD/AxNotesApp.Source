@@ -18,7 +18,7 @@ class MetadataError(Exception):
 
 
 class MetadataNotFoundError(MetadataError):
-    """Raised when a metadata file does not exist."""
+    """Raised when a metadata sidecar does not exist."""
 
 
 class MalformedMetadataError(MetadataError):
@@ -148,9 +148,9 @@ class MetadataFile:
         try:
             data = json.loads(content)
         except json.JSONDecodeError as error:
-            raise MalformedMetadataError("Metadata file contains invalid JSON.") from error
+            raise MalformedMetadataError("Metadata sidecar contains invalid JSON.") from error
         if not isinstance(data, dict) or set(data) != {"schema_version", "entries"}:
-            raise MalformedMetadataError("Metadata file has missing or unknown fields.")
+            raise MalformedMetadataError("Metadata sidecar has missing or unknown fields.")
         if type(data["schema_version"]) is not int:
             raise MalformedMetadataError("Metadata schema_version must be an integer.")
         if data["schema_version"] != SCHEMA_VERSION:
@@ -177,14 +177,14 @@ def load_metadata(path: str | Path) -> MetadataFile:
     try:
         content = Path(path).read_text(encoding="utf-8")
     except FileNotFoundError as error:
-        raise MetadataNotFoundError(f"Metadata file not found: {path}") from error
+        raise MetadataNotFoundError(f"Metadata sidecar not found: {path}") from error
     except UnicodeDecodeError as error:
-        raise MalformedMetadataError("Metadata file is not valid UTF-8.") from error
+        raise MalformedMetadataError("Metadata sidecar is not valid UTF-8.") from error
     return MetadataFile.from_json(content)
 
 
 def write_metadata(path: str | Path, metadata: MetadataFile) -> None:
-    """Atomically replace a metadata file after validating the serialized payload."""
+    """Atomically replace a metadata sidecar after validating the serialized payload."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     serialized = metadata.to_json()

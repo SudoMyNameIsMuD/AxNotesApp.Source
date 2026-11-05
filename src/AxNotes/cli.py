@@ -17,8 +17,8 @@ MENU = """Commands
 /quit      Close AxNotes
 
 Maintenance
-/reindex   Rebuild the search index
-/sync      Update the index from Markdown"""
+/reindex   Rebuild the derived index
+/sync      Refresh the derived index from authoritative Markdown and metadata sidecars"""
 
 
 def find_root(start: Path) -> Path:
@@ -71,10 +71,10 @@ def print_search(notebook, query, output_fn=print):
 
 def capture_inline_entry(notebook, raw, day=None):
     value = raw.strip()
-    detail = normalize_detail(value)
-    if detail is not None:
-        notebook.append_detail(detail, day=day)
-        return f"     › {detail}"
+    supporting_detail = normalize_detail(value)
+    if supporting_detail is not None:
+        notebook.append_detail(supporting_detail, day=day)
+        return f"     › {supporting_detail}"
 
     entry_type, text, state = normalize_entry(value)
     normalized = Entry(entry_type, text, state)
@@ -94,10 +94,10 @@ def handle_command(notebook, raw, output_fn=print, input_fn=input):
         if query:
             print_search(notebook, query, output_fn=output_fn)
     elif command == "/reindex":
-        output_fn(f"AxNotes index rebuilt: {rebuild(notebook)} entries")
+        output_fn(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif command == "/sync":
         sync(notebook)
-        output_fn("AxNotes index synchronized.")
+        output_fn("Derived index synchronized.")
     elif command in {"/help", "/"}:
         output_fn("\n" + MENU + "\n")
     elif command in {"/quit", "/exit"}:
@@ -170,10 +170,10 @@ def main(argv=None):
     elif args.command == "search":
         print_search(notebook, args.query)
     elif args.command == "reindex":
-        print(f"AxNotes index rebuilt: {rebuild(notebook)} entries")
+        print(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif args.command == "sync":
         sync(notebook)
-        print("AxNotes index synchronized.")
+        print("Derived index synchronized.")
     return 0
 
 

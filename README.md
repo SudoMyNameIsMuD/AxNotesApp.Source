@@ -1,6 +1,6 @@
-# AxNotes v0.1.7
+# AxNotes v0.1.8
 
-AxNotes is a local-first, Markdown-authoritative bullet notebook. This build restores the working interactive CLI while retaining the new `notes/` storage layout and clean Markdown introduced during P0.
+AxNotes is a local-first bullet notebook. Authoritative Markdown stores entries, while metadata sidecars preserve durable identity and the derived index supports search.
 
 ## Windows PowerShell
 
@@ -73,19 +73,23 @@ AxNotes-Notebook-v016/
 └── AxNotes.toml
 ```
 
-The index `.AxNotes/index.sqlite3` is created only when search/indexing requires it. New Markdown contains no UUID HTML comments.
+The derived index `.AxNotes/index.sqlite3` is created only when search or indexing requires it. Authoritative Markdown contains no UUID HTML comments.
 
 ## Writing
 
-Inside AxNotes:
+Inside AxNotes, quick-entry notation currently includes:
 
-- normal text creates a note
-- `[` creates a task
-- trailing `[x` or `[x]` marks a task complete
-- `!` marks important
-- `?` marks a question
-- `>` creates a supporting detail
+- Plain text creates a normal note.
+- Leading `[` or `[ ]` creates an open task.
+- Leading or trailing `[x` or `[x]` creates a completed task.
+- Leading or trailing `!` creates an important entry.
+- Leading or trailing `?` creates a question.
+- Leading or trailing `>` creates a supporting detail.
 - `/` displays commands
+
+AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker. AxNotes places the canonical Markdown marker at the beginning of the stored entry. Trailing quick-entry notation is removed from the entry text during normalization. The CLI adds presentation spacing to form the rendered marker; alignment is not stored in Markdown.
+
+After capture, AxNotes returns to the writing prompt without printing a second rendered copy of the entry.
 
 ## Commands
 
@@ -102,23 +106,15 @@ Maintenance:
 - `/reindex`
 - `/sync`
 
-Planned: `/lastweek` and `/month`.
+Planned, not yet available: `/markdown`, `/md`, `/lastweek`, `/month`, and `/clearwelcome`.
+
+Command results appear as inline command output before AxNotes returns to the writing prompt.
 
 ## P0 architecture status
 
-Implemented in this build:
+P0 Steps 1 through 8 are complete:
 
-- `notes/` replaces `daily/` for new notebooks.
-- New Markdown is clean and contains no UUID comments.
-- `.AxNotes/metadata/` is reserved for durable identity sidecars.
-- SQLite continues to be derived and disposable.
-- The full interactive CLI is restored on top of the new layout.
-
-Not implemented yet:
-
-- metadata JSON schema persistence
-- fingerprinting
-- reconciliation engine
-- atomic metadata sidecar writes
-
-Those remain the next P0 steps.
+- `notes/` contains authoritative Markdown.
+- Metadata sidecars under `.AxNotes/metadata/` store durable entry identities.
+- The derived index is disposable and rebuildable from Markdown and metadata sidecars.
+- Markdown remains clean and contains no visible UUID comments.

@@ -231,7 +231,7 @@ def _candidate_for_new_entry(
 def reconcile(old_entries: Iterable[Any], new_entries: Iterable[Any]) -> ReconciliationResult:
     """Match new entries to old entries using the stable fingerprint passes from Step 4.
 
-    The matching order is exact, task-state, supporting-detail, compatible type transition,
+    The matching order is exact, task-state, supporting detail, compatible type transition,
     then a bounded-neighbor pass. Any remaining entries are treated as new identities rather
     than reusing ambiguous or missing UUIDs.
     """

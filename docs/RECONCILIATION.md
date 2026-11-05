@@ -1,6 +1,6 @@
 # Reconciliation, Step 4
 
-This module provides a pure in-memory reconciliation pass for matching prior and current entry sequences without mutating Markdown, metadata, or SQLite.
+This module provides a pure in-memory reconciliation pass for matching prior and current entry sequences without mutating authoritative Markdown, metadata sidecars, or the derived index.
 
 ## Matching order
 
@@ -8,7 +8,7 @@ The implementation follows the Step 4 safety model:
 
 1. Unique `full` fingerprint: exact match.
 2. Unique `content` fingerprint: task-state change.
-3. Unique `parent` fingerprint: supporting-detail change.
+3. Unique `parent` fingerprint: supporting detail change.
 4. Unique `text` fingerprint: compatible type transition.
 5. Single remaining change bounded by existing matched neighbors.
 6. Otherwise, create a new identity and emit a diagnostic.

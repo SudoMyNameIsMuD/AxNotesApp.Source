@@ -9,25 +9,25 @@
 
 - P0 Steps 1 through 8 are complete.
 - Working interactive CLI uses the `notes/` notebook layout.
-- Clean Markdown contains no visible UUID comments.
-- Durable entry identities are stored in validated JSON sidecars under `.AxNotes/metadata/`.
-- SQLite is derived, disposable, and rebuildable from Markdown plus metadata.
+- Authoritative Markdown contains no visible UUID comments.
+- Durable entry identities are stored in validated metadata sidecars under `.AxNotes/metadata/`.
+- The derived index is disposable and rebuildable from authoritative Markdown and metadata sidecars.
 - Renderer uses the `entry.entry_type` model contract.
 - P0 is validated on Windows with OneDrive; macOS and Linux validation remain pending.
 
 ### Locked Format and Architecture Decisions
 
-- `notes/` is the authoritative Markdown content directory.
+- `notes/` contains authoritative Markdown.
 - `AxNotes.toml` identifies an AxNotes notebook.
 - `AxNotes init` creates `notes/`, `.AxNotes/metadata/`, and `AxNotes.toml`.
-- `.AxNotes/index.sqlite3` is derived, created lazily, and may be rebuilt.
-- Markdown owns entry text, type, task state, supporting details, and order.
-- `.AxNotes/metadata/` owns durable identity and relationships.
+- `.AxNotes/index.sqlite3` is the derived index, created lazily, and may be rebuilt.
+- Authoritative Markdown owns entry text, entry type, task state, supporting details, and order.
+- Metadata sidecars under `.AxNotes/metadata/` own durable identity and relationships.
 - Supporting details do not receive independent UUIDs in metadata schema v1.
-- AxNotes supports one supporting-detail level in v0.1.
-- Display alignment is presentation-only; Markdown is not padded for terminal output.
+- AxNotes supports one level of supporting detail in v0.1.
+- Rendered marker alignment is presentation-only; Markdown is not padded for terminal output.
 - Metadata failure must never damage or rewrite Markdown.
-- Metadata is committed before SQLite is refreshed.
+- Metadata sidecars are committed before the derived index is refreshed.
 - Normal packages remain complete runnable applications unless explicitly labeled as prototypes.
 
 ### P0: Storage and Durable Identity Foundation — Complete
@@ -81,7 +81,7 @@ Each interface step includes implementation, regression tests, help updates, and
 
 #### AxNotes Key
 
-The AxNotes Key shows how each entry type appears in the CLI after rendering.
+The AxNotes Key shows the rendered marker for each entry type or task state.
 
 ```text
  -  Normal note
@@ -100,7 +100,7 @@ The AxNotes Key shows how each entry type appears in the CLI after rendering.
 
 Quick-entry notation is the abbreviated syntax accepted while capturing an entry. AxNotes normalizes that input into an entry type, task state when applicable, entry text, and canonical Markdown marker.
 
-| Entry type | Accepted quick-entry notation | Shortest shortcut | Markdown marker | Rendered marker | Example quick entry |
+| Entry type | Quick-entry notation | Shortest shortcut | Markdown marker | Rendered marker | Example quick entry |
 |---|---|---|---|---|---|
 | Normal note | Plain text | Plain text | `-` | ` - ` | `Follow up with John Doe` |
 | Open task | Leading `[` or `[ ]` | `[` | `[ ]` | `[ ]` | `[Follow up with John Doe` |
@@ -119,9 +119,7 @@ Quick-entry notation is the abbreviated syntax accepted while capturing an entry
 - `[>` or `[>]` identifies a migrated task.
 - `[` is the shortest shortcut for an open task.
 - The closing `]` may be omitted when using task-state shorthand.
-- AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker.
-- AxNotes places the canonical Markdown marker at the beginning of the stored entry.
-- Trailing quick-entry notation is removed from the entry text during normalization.
+- AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker. AxNotes places the canonical Markdown marker at the beginning of the stored entry. Trailing quick-entry notation is removed from the entry text during normalization.
 - The CLI applies presentation spacing to produce the rendered marker.
 - Display alignment is not written into Markdown solely for appearance.
 
@@ -136,14 +134,14 @@ Entry type: Task
 Task state: Completed
 Entry text: Follow up with John Doe
 
-Stored Markdown:
+Authoritative Markdown:
 [x] Follow up with John Doe
 
-Rendered CLI output:
+Rendered marker and entry text:
 [x] Follow up with John Doe
 ```
 
-Supporting-detail example:
+Supporting detail example:
 
 ```text
 Captured input:
@@ -153,10 +151,10 @@ Normalized entry:
 Entry type: Supporting detail
 Entry text: Confirm the due date
 
-Stored Markdown:
+Authoritative Markdown:
   › Confirm the due date
 
-Rendered CLI output:
+Rendered marker and entry text:
      › Confirm the due date
 ```
 
@@ -164,22 +162,22 @@ Rendered CLI output:
 
 | Term | Definition |
 |---|---|
-| **Entry** | One AxNotes content item, such as a normal note, task, question, important entry, event, or supporting detail. |
-| **Entry type** | The semantic category assigned to an entry: normal note, task, question, important entry, event, or supporting detail. |
+| **Entry** | One AxNotes content item. Top-level entries include a normal note, task, question, important entry, event, or decision; a top-level entry may have supporting details. |
+| **Entry type** | The semantic category assigned to a top-level entry, such as a normal note, task, question, important entry, event, or decision. A supporting detail is attached to a top-level entry rather than stored as a separate `EntryType`. |
 | **Task state** | The condition of a task: open, in progress, completed, migrated, or canceled. |
-| **Entry text** | The user-written content after quick-entry notation has been interpreted and removed from the text. |
+| **Entry text** | The user-written content after normalization has interpreted the quick-entry notation. Leading notation determines the Markdown marker; trailing quick-entry notation is excluded from entry text during normalization. |
 | **Quick-entry notation** | Any abbreviated syntax AxNotes accepts while the user captures an entry. |
 | **Shortcut** | The shortest accepted quick-entry notation for an entry type or task state. |
 | **Normalization** | The process that converts quick-entry notation into the canonical entry type, task state, entry text, and Markdown marker. |
-| **Markdown marker** | The canonical marker written to the authoritative Markdown file. |
-| **Rendered marker** | The marker and presentation spacing displayed in the CLI. |
+| **Markdown marker** | The canonical marker written to authoritative Markdown. |
+| **Rendered marker** | The Markdown marker plus presentation spacing displayed in the CLI. |
 | **Supporting detail** | A subordinate line attached to the preceding top-level entry. Supporting details use `›` in Markdown and rendered views. |
 | **Writing prompt** | The `- ` prompt where the user captures an entry or enters a slash command. |
 | **Inline command output** | Command results displayed inside the active AxNotes session before returning to the writing prompt. |
-| **Authoritative Markdown** | The files under `notes/` that remain the source of truth for entry text, entry type, task state, supporting details, and order. |
-| **Metadata sidecar** | A JSON file under `.AxNotes/metadata/` that stores durable identity and fingerprints without adding visible UUIDs to Markdown. |
+| **Authoritative Markdown** | The files under `notes/` that store entry text, entry type, task state, supporting details, and order. |
+| **Metadata sidecar** | A JSON sidecar under `.AxNotes/metadata/` that stores durable identity and fingerprints without adding visible UUIDs to authoritative Markdown. |
 | **Durable identity** | The UUID that allows AxNotes to recognize the same logical entry after supported changes. |
-| **Derived index** | The rebuildable SQLite database used for fast search. The index is recreated from Markdown and metadata when needed. |
+| **Derived index** | The rebuildable SQLite index used for fast search. The index is recreated from authoritative Markdown and metadata sidecars when needed. |
 
 #### Terminology Structure
 
@@ -201,7 +199,7 @@ Output terminology
 └── Rendered marker
 ```
 
-#### 1. Prompt Continuity and Inline Command Output
+#### 1. Prompt Continuity and Inline Command Output — Complete
 
 The current CLI uses Python's plain `input()` function. The terminal already echoes captured input, so AxNotes must not print a second copy after saving the entry.
 
@@ -309,7 +307,7 @@ Top-level example:
     the expected completion date.
 ```
 
-Supporting-detail example:
+Supporting detail example:
 
 ```text
      › Include the supporting information requested during the meeting
@@ -319,7 +317,7 @@ Supporting-detail example:
 Requirements:
 
 - Align top-level continuation lines beneath entry text.
-- Align supporting-detail continuation lines beneath detail text.
+- Align supporting detail continuation lines beneath their text.
 - Apply the same rules to `/today`, `/week`, `/search`, and standalone rendering.
 - Preserve entry order and parent-detail relationships.
 - Keep display alignment out of authoritative Markdown.
@@ -409,7 +407,7 @@ Requirements:
 ### Rich Terminal Experience
 
 - Replace plain `input()` with a richer terminal editing layer.
-- Transform quick markers in place rather than echoing raw and normalized lines.
+- Transform quick-entry notation in place rather than echoing raw and normalized lines.
 - Add slash-command suggestions and completion.
 - Add input history and expected Left/Right/Home/End behavior.
 - Improve long-line editing and wrapping.
@@ -522,5 +520,5 @@ Requirements:
 ### Immediate Next Actions
 
 1. Complete and publish the v0.1.8 P0 release.
-2. Begin v0.2 Step 1: inline rendering flow.
+2. Begin v0.2 Step 2: complete quick-entry notation.
 3. Add tests and documentation with each interface step.

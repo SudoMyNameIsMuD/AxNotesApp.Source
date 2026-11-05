@@ -29,22 +29,26 @@ def test_clean_capture_and_render(tmp_path):
     value = notebook(tmp_path)
     day = date.today()
     value.append("Normal note", day=day)
-    value.append("Task", EntryType.TASK, day, TaskState.OPEN)
-    value.append_detail("Detail", day)
+    value.append("Open task", EntryType.TASK, day, TaskState.OPEN)
+    value.append_detail("Supporting detail", day)
     raw = value.note_path(day).read_text(encoding="utf-8")
     assert "<!--" not in raw
     rendered = value.render_day(day, render_entry)
     assert " -  Normal note" in rendered
-    assert "[ ] Task" in rendered
-    assert "     › Detail" in rendered
+    assert "[ ] Open task" in rendered
+    assert "     › Supporting detail" in rendered
 
 
-def test_interaction_shortcuts():
-    assert normalize_entry("[ task") == (EntryType.TASK, "task", TaskState.OPEN)
-    assert normalize_entry("task [x") == (EntryType.TASK, "task", TaskState.DONE)
-    assert normalize_entry("important !")[0] is EntryType.IMPORTANT
-    assert normalize_entry("question ?")[0] is EntryType.QUESTION
-    assert normalize_detail("> detail") == "detail"
+def test_quick_entry_notation_normalizes_existing_shortcuts():
+    assert normalize_entry("[ Open task") == (EntryType.TASK, "Open task", TaskState.OPEN)
+    assert normalize_entry("Completed task [x") == (
+        EntryType.TASK,
+        "Completed task",
+        TaskState.DONE,
+    )
+    assert normalize_entry("Important entry !")[0] is EntryType.IMPORTANT
+    assert normalize_entry("Question ?")[0] is EntryType.QUESTION
+    assert normalize_detail("> Supporting detail") == "Supporting detail"
 
 
 def test_index_uses_notes_and_searches(tmp_path):
@@ -69,7 +73,7 @@ def test_inline_capture_writes_one_markdown_entry_and_no_duplicate_render(tmp_pa
     interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
 
     lines = value.note_path(date.today()).read_text(encoding="utf-8").splitlines()
-    entry_lines = [line for line in lines if line.startswith("- ") or line.startswith("! ") or line.startswith("? ")]
+    entry_lines = [line for line in lines if line.startswith(("- ", "! ", "? "))]
     assert len(entry_lines) == 1
     assert entry_lines[0].endswith("hello")
     assert all("hello" not in item for item in outputs if isinstance(item, str))
@@ -93,6 +97,23 @@ def test_commands_render_inline_then_return_to_prompt(tmp_path):
 
     assert any("Visible note" in item for item in outputs)
     assert outputs[-1] == "AxNotes closed."
+
+
+def test_help_and_index_commands_use_standardized_terminology(tmp_path):
+    value = notebook(tmp_path)
+    outputs = []
+    raw_inputs = iter(["/help", "/reindex", "/sync", "/quit"])
+    interactive(value, input_fn=lambda prompt="- ": next(raw_inputs), output_fn=outputs.append)
+
+    help_output = next(item for item in outputs if item.startswith("\nCommands"))
+    assert "/reindex   Rebuild the derived index" in help_output
+    assert (
+        "/sync      Refresh the derived index from authoritative Markdown and metadata sidecars"
+        in help_output
+    )
+    assert all("/markdown" not in item and "/lastweek" not in item for item in outputs)
+    assert "Derived index rebuilt: 0 entries" in outputs
+    assert "Derived index synchronized." in outputs
 
 
 def test_rebuild_from_markdown_and_metadata_preserves_identity(tmp_path):
