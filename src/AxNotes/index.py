@@ -3,6 +3,7 @@ from contextlib import closing
 from datetime import datetime
 from uuid import uuid4
 
+from .locks import file_lock
 from .metadata import MetadataNotFoundError, load_metadata
 from .parser import parse_file
 from .single_file import parse_notebook
@@ -93,7 +94,7 @@ def replace(db, notebook, path):
     return count
 
 
-def rebuild(notebook):
+def _rebuild_unlocked(notebook):
     notebook.validate()
     temporary_path = notebook.index_path.with_name(f".{notebook.index_path.name}.{uuid4().hex}.tmp")
     count = 0
@@ -108,10 +109,15 @@ def rebuild(notebook):
     return count
 
 
-def sync(notebook):
+def rebuild(notebook):
+    with file_lock(notebook.lock_path):
+        return _rebuild_unlocked(notebook)
+
+
+def _sync_unlocked(notebook):
     notebook.validate()
     if not notebook.index_path.exists():
-        return rebuild(notebook)
+        return _rebuild_unlocked(notebook)
     current = {str(path.relative_to(notebook.root)): path for path in files(notebook)}
     with closing(connect(notebook.index_path)) as db:
         known = {row["path"]: (row["modified_ns"], row["size"])
@@ -124,6 +130,11 @@ def sync(notebook):
                 stat = path.stat()
                 if known.get(relative) != (stat.st_mtime_ns, stat.st_size):
                     replace(db, notebook, path)
+
+
+def sync(notebook):
+    with file_lock(notebook.lock_path):
+        return _sync_unlocked(notebook)
 
 
 def search(notebook, query, limit=50):

@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from .fingerprints import fingerprint_entry
+from .locks import file_lock
 from .metadata import (
     MetadataEntry,
     MetadataFile,
@@ -169,106 +170,107 @@ def _single_file_config(original: str) -> str:
 
 
 def migrate_single_file(notebook: Notebook) -> tuple[int, Path, Path]:
-    notebook.validate()
-    if notebook.config.format == "single-file" or notebook.single_file_path.exists():
-        raise MigrationError("This notebook already uses the single-file format.")
-    if not notebook.notes_dir.is_dir():
-        raise MigrationError("The v0.1 notes/ directory does not exist.")
-    if notebook.index_path.is_file() is False and notebook.index_path.exists():
-        raise MigrationError("The derived index path is not a regular file.")
-    if notebook.single_file_metadata_path.exists():
-        raise MigrationError(
-            "A notebook.json metadata sidecar already exists; refusing to overwrite it."
-        )
-
-    source_files = _read_sources(notebook)
-    records: list[NotebookRecord] = []
-    identities: list[UUID] = []
-    for day, _, entries, source_identities in source_files:
-        for ordinal, entry in enumerate(entries, start=1):
-            records.append(NotebookRecord(entry, day, 0, len(records) + 1))
-            identities.append(
-                source_identities[ordinal] if ordinal in source_identities else uuid4()
-            )
-
-    source_days = [day for day, _, _, _ in source_files]
-    markdown = render_notebook(records, source_days, notebook.config.heading_format)
-    parsed_destination = parse_notebook(markdown, notebook.config.heading_format)
-    if len(parsed_destination) != len(records):
-        raise MigrationError("Migration validation failed: entry counts do not match.")
-    if any(
-        record.day != parsed.day or record.entry != parsed.entry
-        for record, parsed in zip(records, parsed_destination, strict=True)
-    ):
-        raise MigrationError(
-            "Migration validation failed: entries, dates, or supporting details changed."
-        )
-
-    destination_metadata = _metadata_for(records, identities)
-    MetadataFile.from_json(destination_metadata.to_json())
-    notes_backup, metadata_backup = _backup(notebook)
-
-    staging = notebook.root / f".single-file-migration-{uuid.uuid4().hex}"
-    staging.mkdir()
-    staged_markdown = staging / "notebook.md"
-    staged_metadata = staging / "notebook.json"
-    notebook_path = notebook.single_file_path
-    metadata_path = notebook.single_file_metadata_path
-    original_config = (notebook.root / "AxNotes.toml").read_text(encoding="utf-8")
-    staged_config = _single_file_config(original_config)
-    installed_notebook = False
-    installed_metadata = False
-    switched_config = False
-    try:
-        atomic_write_text(staged_markdown, markdown)
-        write_metadata(staged_metadata, destination_metadata)
-        if len(
-            parse_notebook(
-                staged_markdown.read_text(encoding="utf-8"), notebook.config.heading_format
-            )
-        ) != len(records):
-            raise MigrationError("Staged notebook validation failed.")
-        if load_metadata(staged_metadata) != destination_metadata:
-            raise MigrationError("Staged metadata validation failed.")
-
-        os.replace(staged_markdown, notebook_path)
-        installed_notebook = True
-        metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(staged_metadata, metadata_path)
-        installed_metadata = True
-        atomic_write_text(notebook.root / "AxNotes.toml", staged_config)
-        switched_config = True
-
-        from .index import rebuild
-
-        indexed_count = rebuild(notebook)
-        if indexed_count != len(records):
+    with file_lock(notebook.lock_path):
+        notebook.validate()
+        if notebook.config.format == "single-file" or notebook.single_file_path.exists():
+            raise MigrationError("This notebook already uses the single-file format.")
+        if not notebook.notes_dir.is_dir():
+            raise MigrationError("The v0.1 notes/ directory does not exist.")
+        if notebook.index_path.is_file() is False and notebook.index_path.exists():
+            raise MigrationError("The derived index path is not a regular file.")
+        if notebook.single_file_metadata_path.exists():
             raise MigrationError(
-                "Migration validation failed: derived index entry count does not match."
+                "A notebook.json metadata sidecar already exists; refusing to overwrite it."
             )
-        db = sqlite3.connect(notebook.index_path)
-        with db:
-            indexed_identities = db.execute(
-                "SELECT id, ordinal FROM entries ORDER BY ordinal"
-            ).fetchall()
-        db.close()
-        expected_identities = [
-            (str(identity), ordinal) for ordinal, identity in enumerate(identities, start=1)
-        ]
-        if indexed_identities != expected_identities:
-            raise MigrationError(
-                "Migration validation failed: derived index identities do not match."
-            )
-    except BaseException:
-        if switched_config:
-            atomic_write_text(notebook.root / "AxNotes.toml", original_config)
-        if installed_metadata:
-            metadata_path.unlink(missing_ok=True)
-        if installed_notebook:
-            notebook_path.unlink(missing_ok=True)
-        raise
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging)
 
-    return len(records), notes_backup, metadata_backup
+        source_files = _read_sources(notebook)
+        records: list[NotebookRecord] = []
+        identities: list[UUID] = []
+        for day, _, entries, source_identities in source_files:
+            for ordinal, entry in enumerate(entries, start=1):
+                records.append(NotebookRecord(entry, day, 0, len(records) + 1))
+                identities.append(
+                    source_identities[ordinal] if ordinal in source_identities else uuid4()
+                )
+
+        source_days = [day for day, _, _, _ in source_files]
+        markdown = render_notebook(records, source_days, notebook.config.heading_format)
+        parsed_destination = parse_notebook(markdown, notebook.config.heading_format)
+        if len(parsed_destination) != len(records):
+            raise MigrationError("Migration validation failed: entry counts do not match.")
+        if any(
+            record.day != parsed.day or record.entry != parsed.entry
+            for record, parsed in zip(records, parsed_destination, strict=True)
+        ):
+            raise MigrationError(
+                "Migration validation failed: entries, dates, or supporting details changed."
+            )
+
+        destination_metadata = _metadata_for(records, identities)
+        MetadataFile.from_json(destination_metadata.to_json())
+        notes_backup, metadata_backup = _backup(notebook)
+
+        staging = notebook.root / f".single-file-migration-{uuid.uuid4().hex}"
+        staging.mkdir()
+        staged_markdown = staging / "notebook.md"
+        staged_metadata = staging / "notebook.json"
+        notebook_path = notebook.single_file_path
+        metadata_path = notebook.single_file_metadata_path
+        original_config = (notebook.root / "AxNotes.toml").read_text(encoding="utf-8")
+        staged_config = _single_file_config(original_config)
+        installed_notebook = False
+        installed_metadata = False
+        switched_config = False
+        try:
+            atomic_write_text(staged_markdown, markdown)
+            write_metadata(staged_metadata, destination_metadata)
+            if len(
+                parse_notebook(
+                    staged_markdown.read_text(encoding="utf-8"), notebook.config.heading_format
+                )
+            ) != len(records):
+                raise MigrationError("Staged notebook validation failed.")
+            if load_metadata(staged_metadata) != destination_metadata:
+                raise MigrationError("Staged metadata validation failed.")
+
+            os.replace(staged_markdown, notebook_path)
+            installed_notebook = True
+            metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged_metadata, metadata_path)
+            installed_metadata = True
+            atomic_write_text(notebook.root / "AxNotes.toml", staged_config)
+            switched_config = True
+
+            from .index import rebuild
+
+            indexed_count = rebuild(notebook)
+            if indexed_count != len(records):
+                raise MigrationError(
+                    "Migration validation failed: derived index entry count does not match."
+                )
+            db = sqlite3.connect(notebook.index_path)
+            with db:
+                indexed_identities = db.execute(
+                    "SELECT id, ordinal FROM entries ORDER BY ordinal"
+                ).fetchall()
+            db.close()
+            expected_identities = [
+                (str(identity), ordinal) for ordinal, identity in enumerate(identities, start=1)
+            ]
+            if indexed_identities != expected_identities:
+                raise MigrationError(
+                    "Migration validation failed: derived index identities do not match."
+                )
+        except BaseException:
+            if switched_config:
+                atomic_write_text(notebook.root / "AxNotes.toml", original_config)
+            if installed_metadata:
+                metadata_path.unlink(missing_ok=True)
+            if installed_notebook:
+                notebook_path.unlink(missing_ok=True)
+            raise
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging)
+
+        return len(records), notes_backup, metadata_backup

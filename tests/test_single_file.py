@@ -1,10 +1,13 @@
 import sqlite3
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from uuid import UUID
 
 import pytest
 
 from AxNotes.cli import capture_inline_entry, interactive, main
+from AxNotes.locks import file_lock
 from AxNotes.index import rebuild, search
 from AxNotes.index import sync as sync_index
 from AxNotes.metadata import load_metadata
@@ -17,6 +20,25 @@ def initialized_notebook(path):
     notebook = Notebook(path)
     notebook.initialize()
     return notebook
+
+
+def test_file_lock_serializes_parallel_writers(tmp_path):
+    lock_path = tmp_path / "serial.lock"
+    events = []
+
+    def worker(name):
+        with file_lock(lock_path):
+            events.append(f"start:{name}")
+            time.sleep(0.05)
+            events.append(f"finish:{name}")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(worker, ["alpha", "beta"]))
+
+    assert events[0].startswith("start:")
+    assert events[1].startswith("finish:")
+    assert events[2].startswith("start:")
+    assert events[3].startswith("finish:")
 
 
 def test_migration_preserves_entries_details_uuids_and_backup(tmp_path):

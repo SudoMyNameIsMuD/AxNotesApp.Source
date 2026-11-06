@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+from .locks import file_lock, notebook_lock_path
 from .models import TASK_MARKERS, Entry, EntryType
 from .parser import parse_markdown
 
@@ -106,136 +107,137 @@ def atomic_write_text(path: Path, text: str) -> None:
 def append_to_notebook(
     path: Path, day: date, line: str, heading_format: str = "%A | %d%b%y"
 ) -> None:
-    content = path.read_text(encoding="utf-8") if path.exists() else "# AxNotes Notebook\n"
-    lines = content.splitlines()
-    day_title = day.strftime(heading_format).upper()
-    day_line = f"#### {day_title}"
-    day_start = next(
-        (
-            index
-            for index, value in enumerate(lines)
-            if (match := DAY_HEADING.match(value))
-            and _heading_date(match.group(1), heading_format) == day
-        ),
-        None,
-    )
-
-    if day_start is None:
-        insertion = len(lines)
-        year_line = f"## {day.year}"
-        year_start = next(
-            (index for index, value in enumerate(lines) if value.strip() == year_line),
+    with file_lock(notebook_lock_path(path)):
+        content = path.read_text(encoding="utf-8") if path.exists() else "# AxNotes Notebook\n"
+        lines = content.splitlines()
+        day_title = day.strftime(heading_format).upper()
+        day_line = f"#### {day_title}"
+        day_start = next(
+            (
+                index
+                for index, value in enumerate(lines)
+                if (match := DAY_HEADING.match(value))
+                and _heading_date(match.group(1), heading_format) == day
+            ),
             None,
         )
-        if year_start is None:
-            later_year = next(
-                (
-                    index
-                    for index, value in enumerate(lines)
-                    if (match := re.match(r"^##\s+(\d{4})\s*$", value))
-                    and int(match.group(1)) > day.year
-                ),
+
+        if day_start is None:
+            insertion = len(lines)
+            year_line = f"## {day.year}"
+            year_start = next(
+                (index for index, value in enumerate(lines) if value.strip() == year_line),
                 None,
             )
-            insertion = later_year if later_year is not None else len(lines)
-            block = [
-                year_line,
-                "",
-                f"### {day.strftime('%B')}",
-                "",
-                day_line,
-                "",
-                "##### General Notes",
-                line,
-            ]
-        else:
-            year_end = next(
-                (
-                    index
-                    for index in range(year_start + 1, len(lines))
-                    if re.match(r"^##\s+", lines[index])
-                ),
-                len(lines),
-            )
-            month_title = f"### {day.strftime('%B')}"
-            month_start = next(
-                (
-                    index
-                    for index in range(year_start + 1, year_end)
-                    if lines[index].strip() == month_title
-                ),
-                None,
-            )
-            if month_start is None:
-                later_month = next(
+            if year_start is None:
+                later_year = next(
+                    (
+                        index
+                        for index, value in enumerate(lines)
+                        if (match := re.match(r"^##\s+(\d{4})\s*$", value))
+                        and int(match.group(1)) > day.year
+                    ),
+                    None,
+                )
+                insertion = later_year if later_year is not None else len(lines)
+                block = [
+                    year_line,
+                    "",
+                    f"### {day.strftime('%B')}",
+                    "",
+                    day_line,
+                    "",
+                    "##### General Notes",
+                    line,
+                ]
+            else:
+                year_end = next(
+                    (
+                        index
+                        for index in range(year_start + 1, len(lines))
+                        if re.match(r"^##\s+", lines[index])
+                    ),
+                    len(lines),
+                )
+                month_title = f"### {day.strftime('%B')}"
+                month_start = next(
                     (
                         index
                         for index in range(year_start + 1, year_end)
-                        if (match := re.match(r"^###\s+(.+?)\s*$", lines[index]))
-                        and _month_number(match.group(1)) > day.month
+                        if lines[index].strip() == month_title
                     ),
                     None,
                 )
-                insertion = later_month if later_month is not None else year_end
-                block = [month_title, "", day_line, "", "##### General Notes", line]
-            else:
-                month_end = next(
-                    (
-                        index
-                        for index in range(month_start + 1, year_end)
-                        if re.match(r"^###\s+", lines[index])
-                    ),
-                    year_end,
-                )
-                later_day = next(
-                    (
-                        index
-                        for index in range(month_start + 1, month_end)
-                        if (match := DAY_HEADING.match(lines[index]))
-                        and (existing_day := _heading_date(match.group(1), heading_format))
-                        and existing_day > day
-                    ),
-                    None,
-                )
-                insertion = later_day if later_day is not None else month_end
-                block = [day_line, "", "##### General Notes", line]
+                if month_start is None:
+                    later_month = next(
+                        (
+                            index
+                            for index in range(year_start + 1, year_end)
+                            if (match := re.match(r"^###\s+(.+?)\s*$", lines[index]))
+                            and _month_number(match.group(1)) > day.month
+                        ),
+                        None,
+                    )
+                    insertion = later_month if later_month is not None else year_end
+                    block = [month_title, "", day_line, "", "##### General Notes", line]
+                else:
+                    month_end = next(
+                        (
+                            index
+                            for index in range(month_start + 1, year_end)
+                            if re.match(r"^###\s+", lines[index])
+                        ),
+                        year_end,
+                    )
+                    later_day = next(
+                        (
+                            index
+                            for index in range(month_start + 1, month_end)
+                            if (match := DAY_HEADING.match(lines[index]))
+                            and (existing_day := _heading_date(match.group(1), heading_format))
+                            and existing_day > day
+                        ),
+                        None,
+                    )
+                    insertion = later_day if later_day is not None else month_end
+                    block = [day_line, "", "##### General Notes", line]
 
-        prefix = [""] if insertion > 0 and lines[insertion - 1].strip() else []
-        suffix = [""] if insertion < len(lines) and lines[insertion].strip() else []
-        lines[insertion:insertion] = prefix + block + suffix
-    else:
-        day_end = len(lines)
-        for index in range(day_start + 1, len(lines)):
-            heading = SECTION_HEADING.match(lines[index])
-            if heading and len(heading.group("level")) <= 4:
-                day_end = index
-                break
-
-        section_start = None
-        for index in range(day_start + 1, day_end):
-            if lines[index].strip() == "##### General Notes":
-                section_start = index
-        if section_start is None:
-            insertion = day_end
-            while insertion > day_start and not lines[insertion - 1].strip():
-                insertion -= 1
-            suffix = [""] if day_end < len(lines) else []
-            lines[insertion:insertion] = ["", "##### General Notes", line] + suffix
+            prefix = [""] if insertion > 0 and lines[insertion - 1].strip() else []
+            suffix = [""] if insertion < len(lines) and lines[insertion].strip() else []
+            lines[insertion:insertion] = prefix + block + suffix
         else:
-            section_end = day_end
-            for index in range(section_start + 1, day_end):
+            day_end = len(lines)
+            for index in range(day_start + 1, len(lines)):
                 heading = SECTION_HEADING.match(lines[index])
-                if (heading and len(heading.group("level")) <= 5) or DIVIDER.fullmatch(
-                    lines[index]
-                ):
-                    section_end = index
+                if heading and len(heading.group("level")) <= 4:
+                    day_end = index
                     break
-            insertion = section_end
-            while insertion > section_start + 1 and not lines[insertion - 1].strip():
-                insertion -= 1
-            lines[insertion:insertion] = [line]
 
-    atomic_write_text(path, "\n".join(lines).rstrip() + "\n")
+            section_start = None
+            for index in range(day_start + 1, day_end):
+                if lines[index].strip() == "##### General Notes":
+                    section_start = index
+            if section_start is None:
+                insertion = day_end
+                while insertion > day_start and not lines[insertion - 1].strip():
+                    insertion -= 1
+                suffix = [""] if day_end < len(lines) else []
+                lines[insertion:insertion] = ["", "##### General Notes", line] + suffix
+            else:
+                section_end = day_end
+                for index in range(section_start + 1, day_end):
+                    heading = SECTION_HEADING.match(lines[index])
+                    if (heading and len(heading.group("level")) <= 5) or DIVIDER.fullmatch(
+                        lines[index]
+                    ):
+                        section_end = index
+                        break
+                insertion = section_end
+                while insertion > section_start + 1 and not lines[insertion - 1].strip():
+                    insertion -= 1
+                lines[insertion:insertion] = [line]
+
+        atomic_write_text(path, "\n".join(lines).rstrip() + "\n")
 
 
 def _month_number(value: str) -> int:

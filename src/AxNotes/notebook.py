@@ -5,6 +5,7 @@ from uuid import UUID
 
 from .config import DEFAULT_CONFIG, Config
 from .fingerprints import fingerprint_entry
+from .locks import file_lock, notebook_lock_path
 from .metadata import (
     MetadataEntry,
     MetadataFile,
@@ -57,6 +58,10 @@ class Notebook:
     @property
     def single_file_metadata_path(self):
         return self.metadata_dir / "notebook.json"
+
+    @property
+    def lock_path(self):
+        return notebook_lock_path(self.root)
 
     @property
     def uses_single_file(self):
@@ -128,18 +133,19 @@ class Notebook:
         return result
 
     def sync_metadata(self):
-        if self.uses_single_file:
-            self.reconcile_single_file()
+        with file_lock(self.lock_path):
+            if self.uses_single_file:
+                self.reconcile_single_file()
+                from . import index
+                index.sync(self)
+                return
+
+            for note_path in sorted(self.notes_dir.glob("*.md")):
+                self.reconcile_note_file(note_path)
+
             from . import index
+
             index.sync(self)
-            return
-
-        for note_path in sorted(self.notes_dir.glob("*.md")):
-            self.reconcile_note_file(note_path)
-
-        from . import index
-
-        index.sync(self)
 
     def reconcile_single_file(self):
         records = parse_notebook(
@@ -245,8 +251,9 @@ class Notebook:
                 self.config.heading_format,
             )
             return path
-        with path.open("a", encoding="utf-8", newline="\n") as stream:
-            stream.write(f"{prefix} {clean}\n")
+        with file_lock(self.lock_path):
+            with path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(f"{prefix} {clean}\n")
         return path
 
     def append_detail(self, text: str, day=None):
@@ -258,8 +265,9 @@ class Notebook:
         if self.uses_single_file:
             append_to_notebook(path, day, f"  › {clean}", self.config.heading_format)
             return path
-        with path.open("a", encoding="utf-8", newline="\n") as stream:
-            stream.write(f"  › {clean}\n")
+        with file_lock(self.lock_path):
+            with path.open("a", encoding="utf-8", newline="\n") as stream:
+                stream.write(f"  › {clean}\n")
         return path
 
     def entries_for_day(self, day: date) -> list[Entry]:
