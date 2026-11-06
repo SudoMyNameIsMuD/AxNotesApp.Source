@@ -17,6 +17,8 @@ from .renderer import render_entry
 MENU = """Commands
 /today     Show today's entries
 /week      Show this week's entries
+/lastweek  Show last week's entries
+/month     Show this month's entries
 /search    Search notebook entries
 /markdown  Open notebook.md in the default Markdown app
 /md        Alias for /markdown
@@ -105,6 +107,10 @@ def capture_inline_entry(notebook, raw, day=None):
 def render_view(notebook, view, output_fn=print):
     if view == "week":
         output_fn("\n" + notebook.render_week(date.today(), render_entry) + "\n")
+    elif view == "lastweek":
+        output_fn("\n" + notebook.render_lastweek(date.today(), render_entry) + "\n")
+    elif view == "month":
+        output_fn("\n" + notebook.render_month(date.today(), render_entry) + "\n")
     else:
         output_fn("\n" + notebook.render_day(date.today(), render_entry) + "\n")
 
@@ -133,6 +139,10 @@ def handle_command(notebook, raw, output_fn=print, input_fn=input):
         render_view(notebook, "today", output_fn)
     elif command == "/week":
         render_view(notebook, "week", output_fn)
+    elif command == "/lastweek":
+        render_view(notebook, "lastweek", output_fn)
+    elif command == "/month":
+        render_view(notebook, "month", output_fn)
     elif command == "/search":
         query = argument.strip() or input_fn("Search: ").strip()
         if query:
@@ -176,7 +186,7 @@ def interactive(notebook, input_fn=input, output_fn=print):
                 output_fn("AxNotes closed.")
                 return 0
             command = raw.strip().partition(" ")[0]
-            if command in {"/today", "/week"}:
+            if command in {"/today", "/week", "/lastweek", "/month"}:
                 last_view = command[1:]
             continue
         try:
@@ -195,6 +205,8 @@ def parser():
     init.add_argument("path", nargs="?", default=".")
     sub.add_parser("today")
     sub.add_parser("week")
+    sub.add_parser("lastweek")
+    sub.add_parser("month")
     query = sub.add_parser("search")
     query.add_argument("query")
     sub.add_parser("markdown")
@@ -237,6 +249,10 @@ def main(argv=None):
         print(notebook.render_day(date.today(), render_entry))
     elif args.command == "week":
         print(notebook.render_week(date.today(), render_entry))
+    elif args.command == "lastweek":
+        print(notebook.render_lastweek(date.today(), render_entry))
+    elif args.command == "month":
+        print(notebook.render_month(date.today(), render_entry))
     elif args.command == "search":
         print_search(notebook, args.query)
     elif args.command in {"markdown", "md"}:

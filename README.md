@@ -93,7 +93,7 @@ Inside AxNotes, quick-entry notation currently includes:
 
 AxNotes converts accepted quick-entry notation into the corresponding entry type, task state, and canonical Markdown marker. AxNotes places the canonical Markdown marker at the beginning of the stored entry. Trailing quick-entry notation is removed from the entry text during normalization. The CLI adds presentation spacing to form the rendered marker; alignment is not stored in Markdown.
 
-After a successful capture, AxNotes redraws the most recently requested `/today` or `/week` view before returning to the writing prompt. Until either view is requested, it redraws `/today`. This shows the saved entry in context without printing a separate duplicate line. Other commands do not change the remembered view.
+After a successful capture, AxNotes redraws the most recently requested `/today`, `/week`, `/lastweek`, or `/month` view before returning to the writing prompt. Until either view is requested, it redraws `/today`. This shows the saved entry in context without printing a separate duplicate line. Other commands do not change the remembered view.
 
 ## Commands
 
@@ -101,6 +101,8 @@ Everyday:
 
 - `/today`
 - `/week`
+- `/lastweek`
+- `/month`
 - `/search`
 - `/help`
 - `/quit`
@@ -115,7 +117,7 @@ Available:
 - `/markdown`
 - `/md`
 
-Planned, not yet available: `/lastweek`, `/month`, and `/clearwelcome`.
+Planned, not yet available: `/clearwelcome`.
 
 Command results appear as inline command output before AxNotes returns to the writing prompt.
 

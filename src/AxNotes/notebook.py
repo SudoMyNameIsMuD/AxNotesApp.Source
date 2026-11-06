@@ -289,6 +289,24 @@ class Notebook:
             lines.extend(render_detail(detail) for detail in entry.details)
         return "\n".join(lines).rstrip()
 
+    def render_lastweek(self, day: date, render_entry) -> str:
+        current_start = day - timedelta(days=day.weekday())
+        start = current_start - timedelta(days=7)
+        end = start + timedelta(days=6)
+        lines = [f"# LAST WEEK | {start.strftime('%d%b%y').upper()}–{end.strftime('%d%b%y').upper()}"]
+        for offset in range(7):
+            current = start + timedelta(days=offset)
+            entries = self.entries_for_day(current)
+            if not entries:
+                continue
+            lines.extend(["", f"## {current.strftime('%A | %d%b%y').upper()}"])
+            for entry in entries:
+                lines.append(render_entry(entry))
+                lines.extend(render_detail(detail) for detail in entry.details)
+        if len(lines) == 1:
+            lines.extend(["", "No entries last week."])
+        return "\n".join(lines)
+
     def render_week(self, day: date, render_entry) -> str:
         start = day - timedelta(days=day.weekday())
         end = start + timedelta(days=6)
@@ -304,4 +322,24 @@ class Notebook:
                 lines.extend(render_detail(detail) for detail in entry.details)
         if len(lines) == 1:
             lines.extend(["", "No entries this week."])
+        return "\n".join(lines)
+
+    def render_month(self, day: date, render_entry) -> str:
+        first = day.replace(day=1)
+        if day.month == 12:
+            last = first.replace(year=day.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            last = first.replace(month=day.month + 1, day=1) - timedelta(days=1)
+        lines = [f"# MONTH | {first.strftime('%b').upper()} {first.year}"]
+        for offset in range((last - first).days + 1):
+            current = first + timedelta(days=offset)
+            entries = self.entries_for_day(current)
+            if not entries:
+                continue
+            lines.extend(["", f"## {current.strftime('%A | %d%b%y').upper()}"])
+            for entry in entries:
+                lines.append(render_entry(entry))
+                lines.extend(render_detail(detail) for detail in entry.details)
+        if len(lines) == 1:
+            lines.extend(["", "No entries this month."])
         return "\n".join(lines)

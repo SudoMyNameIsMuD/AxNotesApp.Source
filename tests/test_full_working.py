@@ -128,6 +128,22 @@ def test_capture_rerenders_the_last_week_view(tmp_path):
     assert all("New week entry" in item for item in rendered_outputs[1:])
 
 
+def test_lastweek_and_month_views_render_recent_ranges(tmp_path):
+    value = notebook(tmp_path)
+    today = date.today()
+    last_week = today - timedelta(days=today.weekday() + 7)
+    value.append("Last weekend note", day=last_week)
+    value.append("This month note", day=today.replace(day=1))
+
+    last_week_view = value.render_lastweek(today, render_entry)
+    month_view = value.render_month(today, render_entry)
+
+    assert "Last weekend note" in last_week_view
+    assert "# LAST WEEK |" in last_week_view
+    assert "This month note" in month_view
+    assert "# MONTH |" in month_view
+
+
 def test_help_and_index_commands_use_standardized_terminology(tmp_path):
     value = notebook(tmp_path)
     outputs = []
@@ -141,7 +157,8 @@ def test_help_and_index_commands_use_standardized_terminology(tmp_path):
         in help_output
     )
     assert "/markdown  Open notebook.md in the default Markdown app" in help_output
-    assert all("/lastweek" not in item for item in outputs)
+    assert "/lastweek  Show last week's entries" in help_output
+    assert "/month     Show this month's entries" in help_output
     assert "Derived index rebuilt: 0 entries" in outputs
     assert "Derived index synchronized." in outputs
 
