@@ -1,4 +1,4 @@
-# AxNotes v0.1.8
+# AxNotes v0.1.9
 
 AxNotes is a local-first bullet notebook. Authoritative Markdown stores entries, while metadata sidecars preserve durable identity and the derived index supports search.
 
