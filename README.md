@@ -110,7 +110,12 @@ Maintenance:
 - `/reindex`
 - `/sync`
 
-Planned, not yet available: `/markdown`, `/md`, `/lastweek`, `/month`, and `/clearwelcome`.
+Available:
+
+- `/markdown`
+- `/md`
+
+Planned, not yet available: `/lastweek`, `/month`, and `/clearwelcome`.
 
 Command results appear as inline command output before AxNotes returns to the writing prompt.
 

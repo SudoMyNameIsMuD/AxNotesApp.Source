@@ -16,6 +16,7 @@ from .metadata import (
 from .models import TASK_MARKERS, Entry, EntryType, TaskState
 from .parser import parse_file
 from .reconcile import reconcile
+from .renderer import render_detail, render_entry
 from .single_file import append_to_notebook, parse_notebook
 
 STORAGE_PREFIXES = {
@@ -285,7 +286,7 @@ class Notebook:
         lines = [self.heading(day), ""]
         for entry in self.entries_for_day(day):
             lines.append(render_entry(entry))
-            lines.extend(f"     › {detail}" for detail in entry.details)
+            lines.extend(render_detail(detail) for detail in entry.details)
         return "\n".join(lines).rstrip()
 
     def render_week(self, day: date, render_entry) -> str:
@@ -300,7 +301,7 @@ class Notebook:
             lines.extend(["", f"## {current.strftime('%A | %d%b%y').upper()}"])
             for entry in entries:
                 lines.append(render_entry(entry))
-                lines.extend(f"     › {detail}" for detail in entry.details)
+                lines.extend(render_detail(detail) for detail in entry.details)
         if len(lines) == 1:
             lines.extend(["", "No entries this week."])
         return "\n".join(lines)

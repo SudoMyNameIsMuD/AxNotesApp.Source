@@ -101,6 +101,20 @@ def test_commands_render_inline_then_return_to_prompt(tmp_path):
     assert outputs[-1] == "AxNotes closed."
 
 
+def test_rendered_views_wrap_entries_and_details_under_text(tmp_path):
+    value = notebook(tmp_path)
+    day = date.today()
+    value.append("This is a very long note that should wrap across multiple lines while staying aligned under the entry text.", day=day)
+    value.append_detail("This is a very long detail that should wrap beneath the detail marker without collapsing the alignment.", day=day)
+
+    rendered = value.render_day(day, render_entry)
+    lines = rendered.splitlines()
+    assert any(line.startswith(" -  This is a very long note") for line in lines)
+    assert any(line.startswith("    staying aligned under the entry text.") for line in lines)
+    assert any("This is a very long detail" in line for line in lines)
+    assert any(line.startswith("       without collapsing the alignment.") for line in lines)
+
+
 def test_capture_rerenders_the_last_week_view(tmp_path):
     value = notebook(tmp_path)
     today = date.today()
@@ -126,7 +140,8 @@ def test_help_and_index_commands_use_standardized_terminology(tmp_path):
         "/sync      Refresh the derived index from authoritative Markdown and metadata sidecars"
         in help_output
     )
-    assert all("/markdown" not in item and "/lastweek" not in item for item in outputs)
+    assert "/markdown  Open notebook.md in the default Markdown app" in help_output
+    assert all("/lastweek" not in item for item in outputs)
     assert "Derived index rebuilt: 0 entries" in outputs
     assert "Derived index synchronized." in outputs
 

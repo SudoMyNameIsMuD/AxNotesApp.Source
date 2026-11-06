@@ -1,5 +1,7 @@
 import argparse
 import sqlite3
+import subprocess
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -16,6 +18,8 @@ MENU = """Commands
 /today     Show today's entries
 /week      Show this week's entries
 /search    Search notebook entries
+/markdown  Open notebook.md in the default Markdown app
+/md        Alias for /markdown
 /help      Show commands
 /quit      Close AxNotes
 
@@ -105,6 +109,24 @@ def render_view(notebook, view, output_fn=print):
         output_fn("\n" + notebook.render_day(date.today(), render_entry) + "\n")
 
 
+def open_markdown(notebook: Notebook, output_fn=print, opener=None):
+    path = notebook.single_file_path if notebook.uses_single_file else notebook.root / "notebook.md"
+    if not path.exists():
+        output_fn("Markdown file not found. Run 'AxNotes migrate single-file' first.")
+        return
+    if opener is None:
+        opener = subprocess.Popen
+    command = None
+    if sys.platform.startswith("win"):
+        command = ["cmd", "/c", "start", "", str(path)]
+    elif sys.platform == "darwin":
+        command = ["open", str(path)]
+    else:
+        command = ["xdg-open", str(path)]
+    opener(command)
+    output_fn(f"Opened {path.name} in the default Markdown app.")
+
+
 def handle_command(notebook, raw, output_fn=print, input_fn=input):
     command, _, argument = raw.partition(" ")
     if command == "/today":
@@ -115,6 +137,8 @@ def handle_command(notebook, raw, output_fn=print, input_fn=input):
         query = argument.strip() or input_fn("Search: ").strip()
         if query:
             print_search(notebook, query, output_fn=output_fn)
+    elif command in {"/markdown", "/md"}:
+        open_markdown(notebook, output_fn=output_fn)
     elif command == "/reindex":
         output_fn(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif command == "/sync":
@@ -173,6 +197,8 @@ def parser():
     sub.add_parser("week")
     query = sub.add_parser("search")
     query.add_argument("query")
+    sub.add_parser("markdown")
+    sub.add_parser("md")
     sub.add_parser("reindex")
     sub.add_parser("sync")
     migrate = sub.add_parser("migrate")
@@ -213,6 +239,8 @@ def main(argv=None):
         print(notebook.render_week(date.today(), render_entry))
     elif args.command == "search":
         print_search(notebook, args.query)
+    elif args.command in {"markdown", "md"}:
+        open_markdown(notebook)
     elif args.command == "reindex":
         print(f"Derived index rebuilt: {rebuild(notebook)} entries")
     elif args.command == "sync":

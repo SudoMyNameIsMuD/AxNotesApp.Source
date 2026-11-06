@@ -1,6 +1,6 @@
 from .models import EntryType, TaskState
 
-COMMANDS = ("today", "week", "search", "reindex", "sync", "help", "quit")
+COMMANDS = ("today", "week", "search", "markdown", "md", "reindex", "sync", "help", "quit")
 
 LEADING_TASK_MARKERS = (
     ("[ ]", TaskState.OPEN),
